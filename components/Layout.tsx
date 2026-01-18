@@ -22,7 +22,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="bg-medical-500 p-1.5 rounded-lg">
               <Activity className="h-6 w-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">Materno<span className="text-medical-500">Care</span></h1>
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight">Pré <span className="text-medical-500">Parto</span></h1>
           </div>
           <div className="hidden md:flex items-center gap-6">
             <Link to="/" className={`text-sm font-medium hover:text-medical-600 ${location.pathname === '/' ? 'text-medical-600 font-bold' : 'text-slate-500'}`}>Cronograma</Link>

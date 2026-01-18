@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Patient, PatientStatus } from '../types';
+import { Patient, PatientStatus, Observation } from '../types';
 import { patientService } from '../services/supabaseService';
-import { Search, Share2, BedDouble, Activity, Clock, Ruler, AlertCircle, Check, Copy } from 'lucide-react';
+import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { VitalCharts } from '../components/VitalCharts';
 
 const OverviewPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [copied, setCopied] = useState(false);
+  
+  // State for expanding rows
+  const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
+  const [expandedObservations, setExpandedObservations] = useState<Observation[]>([]);
+  const [loadingObs, setLoadingObs] = useState(false);
 
   useEffect(() => {
     loadPatients();
@@ -29,6 +35,20 @@ const OverviewPage: React.FC = () => {
     });
   };
 
+  const toggleExpand = async (patientId: string) => {
+      if (expandedPatientId === patientId) {
+          setExpandedPatientId(null);
+          setExpandedObservations([]);
+          return;
+      }
+
+      setExpandedPatientId(patientId);
+      setLoadingObs(true);
+      const obs = await patientService.getObservations(patientId);
+      setExpandedObservations(obs);
+      setLoadingObs(false);
+  };
+
   const activePatients = patients.filter(p => 
     p.status !== PatientStatus.DISCHARGED &&
     (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -41,6 +61,46 @@ const OverviewPage: React.FC = () => {
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0];
   };
 
+  // --- Logic for Prontuário Text Generation ---
+  const generateProntuarioText = (obsList: Observation[]) => {
+      // Sort Chronologically: Oldest -> Newest
+      const sorted = [...obsList].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      
+      return sorted.map(o => {
+          const time = new Date(o.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          let line = `-${time}`;
+          
+          // Obstetric
+          if (o.obstetric.bcf) line += ` BCF ${o.obstetric.bcf}`;
+          if (o.obstetric.dinamicaSummary) line += ` Din ${o.obstetric.dinamicaSummary}`;
+          else if (o.obstetric.dinamicaFrequency) line += ` Din ${o.obstetric.dinamicaFrequency}/10'`;
+          
+          if (o.obstetric.dilation) line += ` Dilat ${o.obstetric.dilation}cm`;
+
+          // Vitals
+          if (o.vitals.paSystolic) line += ` PA ${o.vitals.paSystolic}x${o.vitals.paDiastolic}`;
+          if (o.vitals.spo2) line += ` SAT ${o.vitals.spo2}%`;
+          if (o.vitals.tax) line += ` TAX ${o.vitals.tax}`;
+
+          // Meds
+          if (o.medication?.oxytocinDose) line += ` Ocit ${o.medication.oxytocinDose}`;
+          if (o.medication?.misoprostolDose) line += ` Miso ${o.medication.misoprostolDose}`;
+
+          // Mag Protocol
+          if (o.magnesiumData) {
+              if (o.magnesiumData.diuresis) line += ` Diur ${o.magnesiumData.diuresis}`;
+              if (o.magnesiumData.reflex) line += ` Refl ${o.magnesiumData.reflex}`;
+          }
+
+          return line;
+      }).join('\n');
+  };
+
+  const copyProntuarioToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text);
+      alert('Texto copiado para a área de transferência!');
+  };
+
   if (loading) {
       return <div className="p-12 text-center text-slate-400">Carregando painel...</div>;
   }
@@ -51,7 +111,7 @@ const OverviewPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-16 bg-slate-50 z-20 py-2">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Visão Geral do Plantão</h1>
-          <p className="text-slate-500 text-sm">Monitoramento consolidado de pacientes</p>
+          <p className="text-slate-500 text-sm">Monitoramento consolidado e evolução</p>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
@@ -73,7 +133,7 @@ const OverviewPage: React.FC = () => {
                 className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-700 transition-colors active:scale-95"
             >
                 {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                {copied ? 'Link Copiado!' : 'Compartilhar Painel'}
+                <span className="hidden sm:inline">{copied ? 'Link Copiado!' : 'Compartilhar'}</span>
             </button>
         </div>
       </div>
@@ -84,6 +144,7 @@ const OverviewPage: React.FC = () => {
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wide">
+                        <th className="p-4 w-10"></th>
                         <th className="p-4 w-20 text-center">Leito</th>
                         <th className="p-4">Paciente / IG</th>
                         <th className="p-4">Obstétrico (Último)</th>
@@ -98,140 +159,237 @@ const OverviewPage: React.FC = () => {
                             const lastObs = patient.lastObservation;
                             const nextTask = getNextTask(patient);
                             const hasAlert = patient.riskFactors && patient.riskFactors.length > 0;
+                            const isExpanded = expandedPatientId === patient.id;
                             
                             return (
-                                <tr key={patient.id} className="hover:bg-slate-50/80 transition-colors group">
-                                    {/* Bed */}
-                                    <td className="p-4 text-center">
-                                        <div className="bg-medical-50 text-medical-700 font-bold text-xl rounded-lg py-2 border border-medical-100 inline-block w-12 text-center">
-                                            {patient.bed}
-                                        </div>
-                                    </td>
+                                <React.Fragment key={patient.id}>
+                                    <tr 
+                                        className={`transition-colors cursor-pointer ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'}`}
+                                        onClick={() => toggleExpand(patient.id)}
+                                    >
+                                        <td className="p-4 text-center">
+                                            {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                                        </td>
+                                        
+                                        {/* Bed */}
+                                        <td className="p-4 text-center">
+                                            <div className="bg-medical-50 text-medical-700 font-bold text-xl rounded-lg py-2 border border-medical-100 inline-block w-12 text-center">
+                                                {patient.bed}
+                                            </div>
+                                        </td>
 
-                                    {/* Patient Info */}
-                                    <td className="p-4">
-                                        <div className="flex flex-col">
-                                            <Link to={`/patient/${patient.id}`} className="font-bold text-slate-900 text-base hover:text-medical-600 hover:underline">
-                                                {patient.name}
-                                            </Link>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded border border-slate-200">
-                                                    {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}
+                                        {/* Patient Info */}
+                                        <td className="p-4">
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-slate-900 text-base">
+                                                    {patient.name}
                                                 </span>
-                                                <span className="text-xs text-slate-400">{patient.parity}</span>
-                                            </div>
-                                            {hasAlert && (
-                                                <div className="mt-1 flex gap-1 flex-wrap">
-                                                    {patient.riskFactors?.slice(0,2).map(rf => (
-                                                        <span key={rf} className="text-[10px] text-red-600 bg-red-50 px-1 rounded border border-red-100 truncate max-w-[100px]">
-                                                            {rf}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
-
-                                    {/* Obstetric Stats */}
-                                    <td className="p-4">
-                                        {lastObs ? (
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Ruler className="w-4 h-4 text-slate-400" />
-                                                    <span className="font-bold text-slate-700">
-                                                        {lastObs.obstetric.dilation !== undefined ? `${lastObs.obstetric.dilation} cm` : '-'}
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded border border-slate-200">
+                                                        {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}
                                                     </span>
-                                                    <span className="text-xs text-slate-400 ml-1">Dilatação</span>
+                                                    <span className="text-xs text-slate-400">{patient.parity}</span>
                                                 </div>
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Activity className="w-4 h-4 text-rose-400" />
-                                                    <span className="font-bold text-slate-700">
-                                                        {lastObs.obstetric.bcf !== undefined ? lastObs.obstetric.bcf : '-'}
-                                                    </span>
-                                                    <span className="text-xs text-slate-400 ml-1">bpm</span>
-                                                </div>
-                                                <div className="text-xs text-slate-500 pl-6">
-                                                    Din: {lastObs.obstetric.dinamicaSummary || (lastObs.obstetric.dinamicaFrequency ? `${lastObs.obstetric.dinamicaFrequency}/10'` : '-')}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-slate-400 italic">Sem dados</span>
-                                        )}
-                                    </td>
-
-                                    {/* Vitals Stats */}
-                                    <td className="p-4">
-                                        {lastObs ? (
-                                            <div className="space-y-1.5">
-                                                {/* PA */}
-                                                <div className="flex items-center gap-2 text-sm">
-                                                    <Activity className="w-4 h-4 text-indigo-400" />
-                                                    <span className={`font-bold ${
-                                                        (lastObs.vitals.paSystolic || 0) >= 140 ? 'text-red-600' : 'text-slate-700'
-                                                    }`}>
-                                                        {lastObs.vitals.paSystolic !== undefined ? `${lastObs.vitals.paSystolic}x${lastObs.vitals.paDiastolic}` : '-'}
-                                                    </span>
-                                                    <span className="text-xs text-slate-400 ml-1">mmHg</span>
-                                                </div>
-                                                
-                                                {/* MgSO4 Data (if applicable) */}
-                                                {patient.useMagnesiumSulfate && lastObs.magnesiumData && (
-                                                     <div className="bg-purple-50 text-purple-800 text-xs px-2 py-1 rounded border border-purple-100 inline-block">
-                                                        Reflexo: {lastObs.magnesiumData.reflex} | Diurese: {lastObs.magnesiumData.diuresis}
-                                                     </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-slate-400 italic">Sem dados</span>
-                                        )}
-                                    </td>
-
-                                    {/* Schedule */}
-                                    <td className="p-4">
-                                        {nextTask ? (
-                                            <div className="flex items-start gap-2">
-                                                <div className={`p-1.5 rounded-lg ${
-                                                    new Date(nextTask.timestamp).getTime() < new Date().getTime() 
-                                                    ? 'bg-red-100 text-red-600 animate-pulse' 
-                                                    : 'bg-blue-50 text-blue-600'
-                                                }`}>
-                                                    <Clock className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold text-slate-800 text-sm">
-                                                        {new Date(nextTask.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-1 mt-1">
-                                                        {nextTask.focus.map(f => (
-                                                            <span key={f} className="text-[10px] uppercase font-bold text-slate-500 bg-slate-100 px-1 rounded border border-slate-200">
-                                                                {f}
+                                                {hasAlert && (
+                                                    <div className="mt-1 flex gap-1 flex-wrap">
+                                                        {patient.riskFactors?.slice(0,2).map(rf => (
+                                                            <span key={rf} className="text-[10px] text-red-600 bg-red-50 px-1 rounded border border-red-100 truncate max-w-[100px]">
+                                                                {rf}
                                                             </span>
                                                         ))}
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1 text-xs text-green-600 font-medium opacity-50">
-                                                <Check className="w-3 h-3" /> Sem pendências
-                                            </div>
-                                        )}
-                                    </td>
+                                        </td>
 
-                                    {/* Action */}
-                                    <td className="p-4 text-right">
-                                        <Link 
-                                            to={`/patient/${patient.id}`}
-                                            className="text-medical-600 hover:text-medical-700 font-bold text-sm bg-white border border-medical-200 hover:bg-medical-50 px-3 py-1.5 rounded-lg shadow-sm transition-all whitespace-nowrap"
-                                        >
-                                            Detalhes
-                                        </Link>
-                                    </td>
-                                </tr>
+                                        {/* Obstetric Stats */}
+                                        <td className="p-4">
+                                            {lastObs ? (
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <Ruler className="w-4 h-4 text-slate-400" />
+                                                        <span className="font-bold text-slate-700">
+                                                            {lastObs.obstetric.dilation !== undefined ? `${lastObs.obstetric.dilation} cm` : '-'}
+                                                        </span>
+                                                        <span className="text-xs text-slate-400 ml-1">Dilatação</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <Activity className="w-4 h-4 text-rose-400" />
+                                                        <span className="font-bold text-slate-700">
+                                                            {lastObs.obstetric.bcf !== undefined ? lastObs.obstetric.bcf : '-'}
+                                                        </span>
+                                                        <span className="text-xs text-slate-400 ml-1">bpm</span>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-slate-400 italic">Sem dados</span>
+                                            )}
+                                        </td>
+
+                                        {/* Vitals Stats */}
+                                        <td className="p-4">
+                                            {lastObs ? (
+                                                <div className="space-y-1.5">
+                                                    {/* PA */}
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <Activity className="w-4 h-4 text-indigo-400" />
+                                                        <span className="font-bold text-slate-700">
+                                                            {lastObs.vitals.paSystolic !== undefined ? `${lastObs.vitals.paSystolic}x${lastObs.vitals.paDiastolic}` : '-'}
+                                                        </span>
+                                                        <span className="text-xs text-slate-400 ml-1">mmHg</span>
+                                                    </div>
+                                                    
+                                                    {/* MgSO4 Data (if applicable) */}
+                                                    {patient.useMagnesiumSulfate && lastObs.magnesiumData && (
+                                                        <div className="bg-purple-50 text-purple-800 text-xs px-2 py-1 rounded border border-purple-100 inline-block">
+                                                            Reflexo: {lastObs.magnesiumData.reflex}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-slate-400 italic">Sem dados</span>
+                                            )}
+                                        </td>
+
+                                        {/* Schedule */}
+                                        <td className="p-4">
+                                            {nextTask ? (
+                                                <div className="flex items-start gap-2">
+                                                    <div className={`p-1.5 rounded-lg ${
+                                                        new Date(nextTask.timestamp).getTime() < new Date().getTime() 
+                                                        ? 'bg-red-100 text-red-600 animate-pulse' 
+                                                        : 'bg-blue-50 text-blue-600'
+                                                    }`}>
+                                                        <Clock className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-slate-800 text-sm">
+                                                            {new Date(nextTask.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-1 mt-1">
+                                                            {nextTask.focus.map(f => (
+                                                                <span key={f} className="text-[10px] uppercase font-bold text-slate-500 bg-slate-100 px-1 rounded border border-slate-200">
+                                                                    {f}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1 text-xs text-green-600 font-medium opacity-50">
+                                                    <Check className="w-3 h-3" /> Sem pendências
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        {/* Action */}
+                                        <td className="p-4 text-right">
+                                            <Link 
+                                                to={`/patient/${patient.id}`}
+                                                className="text-medical-600 hover:text-medical-700 font-bold text-sm bg-white border border-medical-200 hover:bg-medical-50 px-3 py-1.5 rounded-lg shadow-sm transition-all whitespace-nowrap"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                Detalhes
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                    
+                                    {/* EXPANDED ROW CONTENT */}
+                                    {isExpanded && (
+                                        <tr className="bg-slate-50">
+                                            <td colSpan={7} className="p-0 border-b border-slate-200">
+                                                <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+                                                    
+                                                    {/* 1. Charts Column */}
+                                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                                                            <Activity className="w-4 h-4" /> Gráficos de Tendência
+                                                        </h4>
+                                                        {loadingObs ? (
+                                                            <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Carregando...</div>
+                                                        ) : (
+                                                            <div className="h-64 overflow-y-auto custom-scrollbar">
+                                                                <VitalCharts observations={expandedObservations} />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 2. History List Column */}
+                                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                                                            <Clipboard className="w-4 h-4" /> Histórico Recente
+                                                        </h4>
+                                                        <div className="flex-1 overflow-y-auto max-h-64 custom-scrollbar">
+                                                            {loadingObs ? (
+                                                                <div className="text-center py-8 text-slate-400">...</div>
+                                                            ) : expandedObservations.length === 0 ? (
+                                                                <div className="text-center py-8 text-slate-400 italic text-sm">Sem registros.</div>
+                                                            ) : (
+                                                                <table className="w-full text-xs">
+                                                                    <thead className="bg-slate-50 text-slate-500 sticky top-0">
+                                                                        <tr>
+                                                                            <th className="p-2 text-left">Hora</th>
+                                                                            <th className="p-2 text-left">BCF</th>
+                                                                            <th className="p-2 text-left">PA</th>
+                                                                            <th className="p-2 text-left">Dilat</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-slate-100">
+                                                                        {expandedObservations.slice(0, 10).map(obs => (
+                                                                            <tr key={obs.id}>
+                                                                                <td className="p-2 font-bold text-slate-700">
+                                                                                    {new Date(obs.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                                                </td>
+                                                                                <td className="p-2">{obs.obstetric.bcf || '-'}</td>
+                                                                                <td className="p-2">{obs.vitals.paSystolic ? `${obs.vitals.paSystolic}x${obs.vitals.paDiastolic}` : '-'}</td>
+                                                                                <td className="p-2">{obs.obstetric.dilation ? `${obs.obstetric.dilation}cm` : '-'}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 3. Medical Record Text Generator Column */}
+                                                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                                                                <FileText className="w-4 h-4" /> Copiar para Prontuário
+                                                            </h4>
+                                                            <button 
+                                                                onClick={() => copyProntuarioToClipboard(generateProntuarioText(expandedObservations))}
+                                                                className="text-xs bg-medical-50 text-medical-700 hover:bg-medical-100 px-2 py-1 rounded border border-medical-200 flex items-center gap-1 transition-colors"
+                                                            >
+                                                                <Copy className="w-3 h-3" /> Copiar Texto
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            {loadingObs ? (
+                                                                <div className="h-full bg-slate-50 rounded animate-pulse"></div>
+                                                            ) : (
+                                                                <textarea 
+                                                                    readOnly
+                                                                    className="w-full h-64 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-slate-200"
+                                                                    value={generateProntuarioText(expandedObservations)}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-400 mt-2 text-center">
+                                                            Formato: Cronológico (Antigo &rarr; Novo). Copie e cole no sistema.
+                                                        </p>
+                                                    </div>
+
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </React.Fragment>
                             );
                         })
                     ) : (
                         <tr>
-                            <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                            <td colSpan={7} className="p-8 text-center text-slate-400 italic">
                                 Nenhum paciente encontrado com estes filtros.
                             </td>
                         </tr>
@@ -243,7 +401,6 @@ const OverviewPage: React.FC = () => {
         <div className="bg-slate-50 p-3 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
             <span>Mostrando {activePatients.length} pacientes ativos</span>
             <div className="flex items-center gap-2">
-               <div className="w-2 h-2 rounded-full bg-red-500"></div> PA Elevada
                <div className="w-2 h-2 rounded-full bg-red-100 ml-2"></div> Atrasado
             </div>
         </div>

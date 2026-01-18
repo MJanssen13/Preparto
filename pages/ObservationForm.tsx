@@ -428,6 +428,23 @@ const ObservationForm: React.FC = () => {
       } else {
           // CREATE
           
+          // Determine timestamp logic:
+          // If created via a task (taskId present), use the scheduled task time.
+          // Otherwise, use current time (undefined, service handles it).
+          let observationTimestamp: string | undefined = undefined;
+
+          if (taskId && patient.schedule) {
+             const linkedTask = patient.schedule.find(t => t.id === taskId);
+             if (linkedTask) {
+                 observationTimestamp = linkedTask.timestamp;
+             }
+          }
+
+          const createPayload = {
+              ...payload,
+              timestamp: observationTimestamp
+          };
+
           // Prepare the schedule to be updated:
           // If a taskId is associated with this action, mark it as completed in our local state BEFORE sending.
           const finalSchedule = schedule.map(task => 
@@ -437,7 +454,7 @@ const ObservationForm: React.FC = () => {
           );
           
           // Pass taskId to service (Redundant but safe)
-          await patientService.addObservation(payload, taskId || undefined);
+          await patientService.addObservation(createPayload, taskId || undefined);
           
           // Update the patient with the schedule that definitely has the task marked completed
           await patientService.updatePatient(id, { schedule: finalSchedule });

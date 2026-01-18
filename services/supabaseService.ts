@@ -181,11 +181,15 @@ const mockService = {
     return updatedObs;
   },
 
-  async addObservation(obsData: Omit<Observation, 'id' | 'timestamp'>, scheduledTaskId?: string): Promise<Observation> {
+  async addObservation(obsData: Omit<Observation, 'id' | 'timestamp'> & { timestamp?: string }, scheduledTaskId?: string): Promise<Observation> {
     await delay(400);
     const data = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
     const allObs: Observation[] = data ? JSON.parse(data) : [];
-    const newObs: Observation = { ...obsData, id: crypto.randomUUID(), timestamp: new Date().toISOString() };
+    
+    // Use provided timestamp (from schedule) or current time
+    const timestamp = obsData.timestamp || new Date().toISOString();
+    
+    const newObs: Observation = { ...obsData, id: crypto.randomUUID(), timestamp };
     allObs.push(newObs);
     localStorage.setItem(STORAGE_KEY_OBSERVATIONS, JSON.stringify(allObs));
 
@@ -302,10 +306,11 @@ export const patientService = {
       return updatedObs;
   },
 
-  async addObservation(obsData: Omit<Observation, 'id' | 'timestamp'>, scheduledTaskId?: string): Promise<Observation> {
+  async addObservation(obsData: Omit<Observation, 'id' | 'timestamp'> & { timestamp?: string }, scheduledTaskId?: string): Promise<Observation> {
     if (!supabase) return mockService.addObservation(obsData, scheduledTaskId);
 
-    const timestamp = new Date().toISOString();
+    // Use provided timestamp (from schedule) or current time
+    const timestamp = obsData.timestamp || new Date().toISOString();
     const dbPayload = mapObservationToDB({ ...obsData, timestamp });
     
     const { data, error } = await supabase.from('observations').insert(dbPayload).select().single();
