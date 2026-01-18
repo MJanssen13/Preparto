@@ -7,6 +7,7 @@ import PatientDetails from './pages/PatientDetails';
 import AdmissionForm from './pages/AdmissionForm';
 import EditPatient from './pages/EditPatient';
 import ObservationForm from './pages/ObservationForm';
+import OverviewPage from './pages/OverviewPage';
 
 const App: React.FC = () => {
   return (
@@ -14,6 +15,7 @@ const App: React.FC = () => {
       <Layout>
         <Routes>
           <Route path="/" element={<SchedulePage />} />
+          <Route path="/overview" element={<OverviewPage />} />
           <Route path="/patients" element={<PatientsPage />} />
           <Route path="/admission" element={<AdmissionForm />} />
           <Route path="/patient/:id" element={<PatientDetails />} />

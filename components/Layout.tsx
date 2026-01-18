@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, PlusCircle, Settings, Clock, BedDouble } from 'lucide-react';
+import { Activity, PlusCircle, Settings, Clock, BedDouble, LayoutGrid } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface LayoutProps {
@@ -27,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="hidden md:flex items-center gap-6">
             <Link to="/" className={`text-sm font-medium hover:text-medical-600 ${location.pathname === '/' ? 'text-medical-600 font-bold' : 'text-slate-500'}`}>Cronograma</Link>
             <Link to="/patients" className={`text-sm font-medium hover:text-medical-600 ${location.pathname === '/patients' ? 'text-medical-600 font-bold' : 'text-slate-500'}`}>Pacientes</Link>
+            <Link to="/overview" className={`text-sm font-medium hover:text-medical-600 ${location.pathname === '/overview' ? 'text-medical-600 font-bold' : 'text-slate-500'}`}>Painel Geral</Link>
             <div className="h-8 w-8 bg-medical-100 rounded-full flex items-center justify-center text-medical-700 font-bold ml-4">
               D
             </div>
@@ -41,24 +42,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Mobile Bottom Navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center z-50 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <Link to="/" className={`flex flex-col items-center gap-1 ${isActive('/')}`}>
-          <Clock className="h-6 w-6" />
-          <span className="text-[10px] font-medium">Cronograma</span>
-        </Link>
-        <Link to="/patients" className={`flex flex-col items-center gap-1 ${isActive('/patients')}`}>
+        
+        {/* 1. Pacientes */}
+        <Link to="/patients" className={`flex flex-col items-center gap-1 w-14 ${isActive('/patients')}`}>
           <BedDouble className="h-6 w-6" />
-          <span className="text-[10px] font-medium">Pacientes</span>
+          <span className="text-[10px] font-medium">Leitos</span>
         </Link>
-        <Link to="/admission" className={`flex flex-col items-center gap-1 ${isActive('/admission')}`}>
-          <div className="bg-medical-50 rounded-full p-1 -mt-4 border-4 border-slate-50 shadow-sm">
+
+        {/* 2. Admissão (Center) */}
+        <Link to="/admission" className={`flex flex-col items-center gap-1 w-14 ${isActive('/admission')}`}>
+          <div className="bg-medical-50 rounded-full p-1 -mt-4 border-4 border-slate-50 shadow-sm active:scale-95 transition-transform">
              <PlusCircle className="h-8 w-8 text-medical-600" />
           </div>
           <span className="text-[10px] font-medium text-medical-700">Admitir</span>
         </Link>
-        <button className="flex flex-col items-center gap-1 text-slate-300">
-          <Settings className="h-6 w-6" />
-          <span className="text-[10px] font-medium">Config</span>
-        </button>
+        
+        {/* 3. Overview (Painel) */}
+        <Link to="/overview" className={`flex flex-col items-center gap-1 w-14 ${isActive('/overview')}`}>
+          <LayoutGrid className="h-6 w-6" />
+          <span className="text-[10px] font-medium">Painel</span>
+        </Link>
+
+        {/* 4. Cronograma */}
+        <Link to="/" className={`flex flex-col items-center gap-1 w-14 ${isActive('/')}`}>
+          <Clock className="h-6 w-6" />
+          <span className="text-[10px] font-medium">Agenda</span>
+        </Link>
+        
       </nav>
     </div>
   );

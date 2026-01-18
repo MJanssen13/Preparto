@@ -104,7 +104,11 @@ const PatientDetails: React.FC = () => {
            
            <div className="space-y-2">
               {pendingTasks.slice(0, 3).map(task => (
-                <div key={task.id} className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-blue-100">
+                <Link 
+                  key={task.id} 
+                  to={`/patient/${id}/add-observation?taskId=${task.id}`}
+                  className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-blue-100 hover:bg-white hover:shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+                >
                    <div className="font-bold text-slate-700">
                      {new Date(task.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                    </div>
@@ -115,7 +119,7 @@ const PatientDetails: React.FC = () => {
                           </span>
                       ))}
                    </div>
-                </div>
+                </Link>
               ))}
               {pendingTasks.length > 3 && (
                   <div className="text-center text-xs text-blue-400 font-medium pt-1">
@@ -267,8 +271,8 @@ const PatientDetails: React.FC = () => {
                       <span>Bolsa: {obs.obstetric.membranes}</span>
                    </div>
 
-                   {/* Magnesium Protocol Data */}
-                   {obs.magnesiumData && (
+                   {/* Magnesium Protocol Data - ONLY SHOW IF PATIENT IS USING MAGNESIUM SULFATE */}
+                   {obs.magnesiumData && patient.useMagnesiumSulfate && (
                      <div className="col-span-2 bg-purple-100/50 p-2 rounded-lg border border-purple-200 text-xs text-purple-900 mt-2 flex flex-col gap-1">
                         <div className="font-bold text-[10px] uppercase tracking-wide text-purple-700 flex items-center gap-1">
                             <Activity className="w-3 h-3" /> Protocolo Magnésio
