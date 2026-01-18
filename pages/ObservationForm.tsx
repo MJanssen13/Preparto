@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { MembraneStatus, Patient, ScheduledTask } from '../types';
-import { ArrowLeft, Save, Clock, Trash2, Plus, AlertCircle, X, SlidersHorizontal, ArrowDownUp, CircleDot, Activity, Play, Square, Timer, RotateCcw, Hammer, Droplets, Wind, Waves, Calculator } from 'lucide-react';
+import { ArrowLeft, Save, Clock, Trash2, Plus, AlertCircle, X, SlidersHorizontal, ArrowDownUp, CircleDot, Activity, Play, Square, Timer, RotateCcw, Hammer, Droplets, Wind, Waves, Calculator, Calendar } from 'lucide-react';
 
 // Possible parameters for "Quick Add"
 const ALL_PARAMS = [
@@ -28,6 +28,10 @@ const ObservationForm: React.FC = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [activeParams, setActiveParams] = useState<string[]>([]);
   
+  // Explicit Date/Time state to enforce schedule time
+  const [obsDate, setObsDate] = useState('');
+  const [obsTime, setObsTime] = useState('');
+
   const [formData, setFormData] = useState({
     bcf: '',
     // Dinamica gets updated by the timer component
@@ -248,6 +252,14 @@ const ObservationForm: React.FC = () => {
   const [schedule, setSchedule] = useState<ScheduledTask[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Helper to format date for input
+  const toInputDate = (date: Date) => date.toISOString().split('T')[0];
+  const toInputTime = (date: Date) => {
+      const h = String(date.getHours()).padStart(2, '0');
+      const m = String(date.getMinutes()).padStart(2, '0');
+      return `${h}:${m}`;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
         if (!id) return;
@@ -262,6 +274,10 @@ const ObservationForm: React.FC = () => {
                const obs = await patientService.getObservationById(obsId);
                if (obs) {
                    // Populate Form Data from Existing Observation
+                   const d = new Date(obs.timestamp);
+                   setObsDate(toInputDate(d));
+                   setObsTime(toInputTime(d));
+
                    const paramsToActivate: string[] = [];
                    
                    setFormData({
@@ -311,15 +327,27 @@ const ObservationForm: React.FC = () => {
                    setActiveParams(paramsToActivate);
                }
             } else {
-                // CREATE MODE: Logic to determine visible parameters
+                // CREATE MODE
+                
+                // Initialize timestamp based on Task ID or Current Time
                 if (taskId) {
                     const task = p.schedule.find(t => t.id === taskId);
                     if (task) {
+                        const d = new Date(task.timestamp);
+                        setObsDate(toInputDate(d));
+                        setObsTime(toInputTime(d));
                         setActiveParams(task.focus);
                     } else {
+                        // Task ID found in URL but not in schedule? Fallback to now
+                        const now = new Date();
+                        setObsDate(toInputDate(now));
+                        setObsTime(toInputTime(now));
                         setActiveParams(ALL_PARAMS.map(p => p.id));
                     }
                 } else {
+                    const now = new Date();
+                    setObsDate(toInputDate(now));
+                    setObsTime(toInputTime(now));
                     setActiveParams(ALL_PARAMS.map(p => p.id));
                 }
             }
@@ -379,9 +407,14 @@ const ObservationForm: React.FC = () => {
     setIsSubmitting(true);
 
     const numOrUndef = (val: string) => val === '' ? undefined : Number(val);
+    
+    // Construct strict timestamp from the input fields
+    const finalDateObj = new Date(`${obsDate}T${obsTime}`);
+    const finalIsoString = finalDateObj.toISOString();
 
     const payload = {
         patientId: id,
+        timestamp: finalIsoString, // Use the explicit form time
         examinerName: 'Dr. Demo', 
         vitals: {
           fc: 0, 
@@ -428,23 +461,6 @@ const ObservationForm: React.FC = () => {
       } else {
           // CREATE
           
-          // Determine timestamp logic:
-          // If created via a task (taskId present), use the scheduled task time.
-          // Otherwise, use current time (undefined, service handles it).
-          let observationTimestamp: string | undefined = undefined;
-
-          if (taskId && patient.schedule) {
-             const linkedTask = patient.schedule.find(t => t.id === taskId);
-             if (linkedTask) {
-                 observationTimestamp = linkedTask.timestamp;
-             }
-          }
-
-          const createPayload = {
-              ...payload,
-              timestamp: observationTimestamp
-          };
-
           // Prepare the schedule to be updated:
           // If a taskId is associated with this action, mark it as completed in our local state BEFORE sending.
           const finalSchedule = schedule.map(task => 
@@ -454,7 +470,7 @@ const ObservationForm: React.FC = () => {
           );
           
           // Pass taskId to service (Redundant but safe)
-          await patientService.addObservation(createPayload, taskId || undefined);
+          await patientService.addObservation(payload, taskId || undefined);
           
           // Update the patient with the schedule that definitely has the task marked completed
           await patientService.updatePatient(id, { schedule: finalSchedule });
@@ -502,6 +518,34 @@ const ObservationForm: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         
+        {/* Date/Time Override Section */}
+        <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex gap-3">
+             <div className="flex-1">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                     <Calendar className="w-3 h-3" /> Data
+                 </label>
+                 <input 
+                    type="date" 
+                    required
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700"
+                    value={obsDate}
+                    onChange={(e) => setObsDate(e.target.value)}
+                 />
+             </div>
+             <div className="flex-1">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                     <Clock className="w-3 h-3" /> Hora da Aferição
+                 </label>
+                 <input 
+                    type="time" 
+                    required
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700"
+                    value={obsTime}
+                    onChange={(e) => setObsTime(e.target.value)}
+                 />
+             </div>
+        </div>
+
         {/* Param Selector */}
         <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm overflow-x-auto">
             <div className="flex items-center gap-2 text-xs text-slate-500 font-bold mb-2 uppercase tracking-wide">
