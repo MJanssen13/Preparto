@@ -1,0 +1,29 @@
+import React from 'react';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import Layout from './components/Layout';
+import SchedulePage from './pages/SchedulePage';
+import PatientsPage from './pages/PatientsPage';
+import PatientDetails from './pages/PatientDetails';
+import AdmissionForm from './pages/AdmissionForm';
+import EditPatient from './pages/EditPatient';
+import ObservationForm from './pages/ObservationForm';
+
+const App: React.FC = () => {
+  return (
+    <Router>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<SchedulePage />} />
+          <Route path="/patients" element={<PatientsPage />} />
+          <Route path="/admission" element={<AdmissionForm />} />
+          <Route path="/patient/:id" element={<PatientDetails />} />
+          <Route path="/patient/:id/edit" element={<EditPatient />} />
+          <Route path="/patient/:id/add-observation" element={<ObservationForm />} />
+          <Route path="/patient/:id/edit-observation/:obsId" element={<ObservationForm />} />
+        </Routes>
+      </Layout>
+    </Router>
+  );
+};
+
+export default App;
