@@ -346,7 +346,7 @@ const ObservationForm: React.FC = () => {
           id: crypto.randomUUID(),
           timestamp: nextTime.toISOString(),
           focus: ['BCF'],
-          status: 'pending'
+          status: 'pending' as const
       }].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()));
   };
 
