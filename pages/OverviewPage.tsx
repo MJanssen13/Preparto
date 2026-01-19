@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, Observation } from '../types';
 import { patientService } from '../services/supabaseService';
-import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText, Filter, BedDouble, AlertCircle, Maximize2, Minimize2, X } from 'lucide-react';
+import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText, Filter, BedDouble, AlertCircle, Maximize2, Minimize2, X, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { VitalCharts } from '../components/VitalCharts';
 
@@ -99,7 +99,7 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                     <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Carregando...</div>
                 ) : (
                     <div className={`${isChartMaximized ? 'flex-1 min-h-0' : 'h-64'} overflow-y-auto custom-scrollbar`}>
-                        <VitalCharts observations={observations} />
+                        <VitalCharts observations={observations} isMaximized={isChartMaximized} />
                     </div>
                 )}
             </div>
@@ -289,6 +289,20 @@ const OverviewPage: React.FC = () => {
     });
   };
 
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (confirm('Tem certeza que deseja excluir permanentemente este paciente e todo o seu histórico? Esta ação não pode ser desfeita.')) {
+        try {
+            await patientService.deletePatient(id);
+            setPatients(prev => prev.filter(p => p.id !== id));
+            if (expandedPatientId === id) setExpandedPatientId(null);
+        } catch (error) {
+            console.error(error);
+            alert('Erro ao excluir paciente.');
+        }
+    }
+  };
+
   const toggleExpand = async (patientId: string) => {
       if (expandedPatientId === patientId) {
           setExpandedPatientId(null);
@@ -408,8 +422,18 @@ const OverviewPage: React.FC = () => {
                          </div>
                       </div>
                    </div>
-                   <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                      <ChevronDown className="w-5 h-5 text-slate-400" />
+                   <div className="flex items-center gap-2">
+                      {isResolved && (
+                          <button 
+                            onClick={(e) => handleDelete(e, patient.id)}
+                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                          >
+                             <Trash2 className="w-5 h-5" />
+                          </button>
+                      )}
+                      <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                         <ChevronDown className="w-5 h-5 text-slate-400" />
+                      </div>
                    </div>
                 </div>
 
@@ -631,13 +655,24 @@ const OverviewPage: React.FC = () => {
 
                                         {/* Action */}
                                         <td className="p-4 text-right">
-                                            <Link 
-                                                to={`/patient/${patient.id}`}
-                                                className="text-medical-600 hover:text-medical-700 font-bold text-sm bg-white border border-medical-200 hover:bg-medical-50 px-3 py-1.5 rounded-lg shadow-sm transition-all whitespace-nowrap"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                Detalhes
-                                            </Link>
+                                            <div className="flex items-center justify-end gap-2">
+                                                {isResolved && (
+                                                    <button 
+                                                        onClick={(e) => handleDelete(e, patient.id)}
+                                                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                        title="Excluir Prontuário"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <Link 
+                                                    to={`/patient/${patient.id}`}
+                                                    className="text-medical-600 hover:text-medical-700 font-bold text-sm bg-white border border-medical-200 hover:bg-medical-50 px-3 py-1.5 rounded-lg shadow-sm transition-all whitespace-nowrap"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    Detalhes
+                                                </Link>
+                                            </div>
                                         </td>
                                     </tr>
                                     

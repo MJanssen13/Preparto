@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Observation } from '../types';
 import {
@@ -14,6 +15,7 @@ import {
 
 interface VitalChartsProps {
   observations: Observation[];
+  isMaximized?: boolean;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -32,7 +34,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const VitalCharts: React.FC<VitalChartsProps> = ({ observations }) => {
+export const VitalCharts: React.FC<VitalChartsProps> = ({ observations, isMaximized = false }) => {
   // Reverse observations for chronological order (Oldest -> Newest)
   const data = [...observations].reverse().map(obs => ({
     time: obs.timestamp,
@@ -50,17 +52,27 @@ export const VitalCharts: React.FC<VitalChartsProps> = ({ observations }) => {
   const hasBCFData = data.some(d => d.bcf !== undefined || d.dilation !== undefined);
   const hasPAData = data.some(d => d.systolic !== undefined || d.standingSystolic !== undefined);
 
+  // Dynamic Layout Classes
+  const containerClasses = isMaximized 
+    ? `grid grid-cols-1 ${hasBCFData && hasPAData ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-4 h-full` 
+    : "space-y-6";
+
+  const cardClasses = `bg-white p-4 rounded-xl border border-slate-200 shadow-sm ${isMaximized ? 'flex flex-col h-full' : ''}`;
+  
+  // Height calculation: If maximized, expand to fill; otherwise use fixed height
+  const chartWrapperClasses = isMaximized ? "flex-1 w-full min-h-[300px]" : "h-48 w-full";
+
   return (
-    <div className="space-y-6">
+    <div className={containerClasses}>
       
       {/* BCF & Dilation Chart */}
       {hasBCFData && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+        <div className={cardClasses}>
+            <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2 flex-shrink-0">
             <span className="w-2 h-2 rounded-full bg-obs-500"></span>
             BCF e Dilatação
             </h4>
-            <div className="h-48 w-full">
+            <div className={chartWrapperClasses}>
             <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -105,12 +117,12 @@ export const VitalCharts: React.FC<VitalChartsProps> = ({ observations }) => {
 
       {/* Blood Pressure Chart */}
       {hasPAData && (
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+        <div className={cardClasses}>
+            <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2 flex-shrink-0">
             <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
             Pressão Arterial (mmHg)
             </h4>
-            <div className="h-48 w-full">
+            <div className={chartWrapperClasses}>
             <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />

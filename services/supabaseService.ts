@@ -165,6 +165,34 @@ export const patientService = {
     return mapPatientFromDB(data);
   },
 
+  async deletePatient(id: string): Promise<void> {
+    if (!supabase) {
+        // Local Storage: Delete patient and observations
+        const patientsStr = localStorage.getItem(STORAGE_KEY_PATIENTS);
+        if (patientsStr) {
+            const patients = JSON.parse(patientsStr);
+            const newPatients = patients.filter((p: Patient) => p.id !== id);
+            localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(newPatients));
+        }
+
+        const obsStr = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
+        if (obsStr) {
+            const obs = JSON.parse(obsStr);
+            const newObs = obs.filter((o: Observation) => o.patientId !== id);
+            localStorage.setItem(STORAGE_KEY_OBSERVATIONS, JSON.stringify(newObs));
+        }
+        return;
+    }
+
+    // Supabase: Delete observations first to satisfy FK constraints (if cascade not set)
+    const { error: obsError } = await supabase.from('observations').delete().eq('patient_id', id);
+    if (obsError) throw obsError;
+
+    // Delete patient
+    const { error: patError } = await supabase.from('patients').delete().eq('id', id);
+    if (patError) throw patError;
+  },
+
   async getObservations(patientId: string): Promise<Observation[]> {
     if (!supabase) {
         const data = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
