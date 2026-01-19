@@ -3,9 +3,260 @@
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, Observation } from '../types';
 import { patientService } from '../services/supabaseService';
-import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText, Filter, BedDouble, AlertCircle } from 'lucide-react';
+import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText, Filter, BedDouble, AlertCircle, Maximize2, Minimize2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { VitalCharts } from '../components/VitalCharts';
+
+// --- Helper Component for Expanded Content ---
+const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patient, observations: Observation[], isLoading: boolean }) => {
+    const [isChartMaximized, setIsChartMaximized] = useState(false);
+
+    // Function to generate the prontuario text (kept local to this component for the button)
+    const formatToqueVaginal = (o: Observation['obstetric']) => {
+        const parts = [];
+        if (o.effacement !== undefined) parts.push(o.effacement === 0 ? 'G' : `${o.effacement}% AP`);
+        const posMap: Record<string, string> = { 'Posterior': 'P', 'Intermediário': 'I', 'Central': 'C' };
+        if (o.cervixPosition && posMap[o.cervixPosition]) parts.push(posMap[o.cervixPosition]);
+        const conMap: Record<string, string> = { 'Nasal': 'N', 'Nasolabial': 'NL', 'Labial': 'L' };
+        if (o.cervixConsistency && conMap[o.cervixConsistency]) parts.push(conMap[o.cervixConsistency]);
+        if (o.dilation !== undefined && o.dilation > 0) parts.push(`${o.dilation}CM`);
+        else if (o.cervixStatus && o.cervixStatus.length > 0) parts.push(o.cervixStatus.join(', '));
+        else if (o.dilation === 0) parts.push('0CM');
+        if (o.presentationHeight) parts.push(o.presentationHeight);
+        if (o.bloodOnGlove !== undefined) parts.push(o.bloodOnGlove ? 'SDL' : 'SSDL');
+        return parts.length > 0 ? `TOQUE: ${parts.join(', ')}` : '';
+    };
+
+    const generateProntuarioText = (patient: Patient, obsList: Observation[]) => {
+        const sorted = [...obsList].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        let text = '';
+        let lastDate = '';
+
+        sorted.forEach(o => {
+            const dateObj = new Date(o.timestamp);
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const year = String(dateObj.getFullYear()).slice(-2);
+            const dateStr = `${day}/${month}/${year}`;
+
+            if (dateStr !== lastDate) {
+                text += `# ${dateStr} #\n`;
+                lastDate = dateStr;
+            }
+
+            const time = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const lineParts = [`${time} HS`];
+            if (o.obstetric.bcf) lineParts.push(`BCF: ${o.obstetric.bcf} BPM`);
+            if (o.vitals.paSystolic) lineParts.push(`PA: ${o.vitals.paSystolic}X${o.vitals.paDiastolic} MMHG`);
+            if (o.obstetric.dinamicaSummary) lineParts.push(`DU ${o.obstetric.dinamicaSummary.toUpperCase()}`);
+            else if (o.obstetric.dinamicaFrequency) lineParts.push(`DU ${o.obstetric.dinamicaFrequency}/10'`);
+            
+            const toqueStr = formatToqueVaginal(o.obstetric);
+            if (toqueStr) lineParts.push(toqueStr);
+
+            if (o.medication?.misoprostolDose) lineParts.push(`MISOPROSTOL ${o.medication.misoprostolDose}MCG`);
+            if (o.medication?.oxytocinDose) lineParts.push(`OCITOCINA ${o.medication.oxytocinDose} ML/H`);
+
+            if (o.magnesiumData) {
+                if (o.magnesiumData.diuresis) lineParts.push(`DIURESE ${o.magnesiumData.diuresis}`);
+                if (o.magnesiumData.reflex) lineParts.push(`REFLEXO ${o.magnesiumData.reflex.toUpperCase()}`);
+            }
+            if (o.notes) lineParts.push(o.notes.toUpperCase());
+            text += lineParts.join(' | ') + '\n';
+        });
+
+        if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
+            text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
+        }
+        return text;
+    };
+
+    const copyProntuarioToClipboard = () => {
+        const text = generateProntuarioText(patient, observations);
+        navigator.clipboard.writeText(text);
+        alert('Texto copiado para a área de transferência!');
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
+            
+            {/* 1. Charts Column - With Maximize Capability */}
+            <div className={`bg-white rounded-xl border border-slate-200 shadow-sm transition-all duration-300 ${isChartMaximized ? 'fixed inset-4 z-50 flex flex-col p-6 shadow-2xl' : 'p-4'}`}>
+                <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                        <Activity className="w-4 h-4" /> Gráficos de Tendência
+                    </h4>
+                    <button 
+                        onClick={() => setIsChartMaximized(!isChartMaximized)}
+                        className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors"
+                        title={isChartMaximized ? "Minimizar" : "Maximizar"}
+                    >
+                        {isChartMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
+                </div>
+                
+                {isLoading ? (
+                    <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Carregando...</div>
+                ) : (
+                    <div className={`${isChartMaximized ? 'flex-1 min-h-0' : 'h-64'} overflow-y-auto custom-scrollbar`}>
+                        <VitalCharts observations={observations} />
+                    </div>
+                )}
+            </div>
+
+            {/* Backgroup overlay for maximize */}
+            {isChartMaximized && (
+                <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40" onClick={() => setIsChartMaximized(false)}></div>
+            )}
+
+            {/* 2. History List Column - FULL Details */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:col-span-2">
+                <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                    <Clipboard className="w-4 h-4" /> Histórico Completo
+                </h4>
+                <div className="flex-1 overflow-auto max-h-64 custom-scrollbar">
+                    {isLoading ? (
+                        <div className="text-center py-8 text-slate-400">...</div>
+                    ) : observations.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 italic text-sm">Sem registros.</div>
+                    ) : (
+                        <table className="w-full text-xs min-w-[600px]">
+                            <thead className="bg-slate-50 text-slate-500 sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th className="p-3 text-left w-16">Hora</th>
+                                    <th className="p-3 text-left w-24">Monitor</th>
+                                    <th className="p-3 text-left">Toque Vaginal</th>
+                                    <th className="p-3 text-left">Sinais Vitais</th>
+                                    <th className="p-3 text-left">Conduta / Obs</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {observations.slice(0, 20).map(obs => {
+                                    const isBcfBad = obs.obstetric.bcf !== undefined && (obs.obstetric.bcf < 110 || obs.obstetric.bcf > 160);
+                                    
+                                    return (
+                                        <tr key={obs.id} className="hover:bg-slate-50/50">
+                                            {/* Hora */}
+                                            <td className="p-3 font-bold text-slate-700 align-top">
+                                                {new Date(obs.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                            </td>
+                                            
+                                            {/* Monitor (BCF / DU) */}
+                                            <td className="p-3 align-top">
+                                                <div className="flex flex-col gap-1">
+                                                    {obs.obstetric.bcf && (
+                                                        <span className={`font-bold ${isBcfBad ? 'text-red-600' : 'text-slate-700'}`}>
+                                                            BCF: {obs.obstetric.bcf}
+                                                        </span>
+                                                    )}
+                                                    {(obs.obstetric.dinamicaSummary || obs.obstetric.dinamicaFrequency) && (
+                                                        <span className="text-[10px] text-slate-500">
+                                                            DU: {obs.obstetric.dinamicaSummary || `${obs.obstetric.dinamicaFrequency}/10'`}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* Toque */}
+                                            <td className="p-3 align-top">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="font-bold text-slate-700">
+                                                        {obs.obstetric.dilation !== undefined ? `${obs.obstetric.dilation} cm` : 
+                                                         (obs.obstetric.cervixStatus?.join(', ') || '-')}
+                                                    </span>
+                                                    <div className="text-[10px] text-slate-500 flex flex-wrap gap-1">
+                                                        {obs.obstetric.effacement !== undefined && <span>Apag: {obs.obstetric.effacement}%</span>}
+                                                        {obs.obstetric.station !== undefined && <span>De Lee: {obs.obstetric.station > 0 ? '+' : ''}{obs.obstetric.station}</span>}
+                                                    </div>
+                                                    {obs.obstetric.membranes && (
+                                                        <span className="text-[10px] bg-slate-100 px-1 rounded w-fit mt-0.5 border border-slate-200">
+                                                            {obs.obstetric.membranes}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* Vitais (PA, Tax, Sat) */}
+                                            <td className="p-3 align-top">
+                                                <div className="flex flex-col gap-0.5">
+                                                    {obs.vitals.paSystolic && (
+                                                        <span className="font-bold text-slate-700">
+                                                            PA: {obs.vitals.paSystolic}x{obs.vitals.paDiastolic}
+                                                        </span>
+                                                    )}
+                                                    <div className="flex gap-2 text-[10px] text-slate-500">
+                                                        {obs.vitals.tax && <span>T: {obs.vitals.tax}°C</span>}
+                                                        {obs.vitals.spo2 && <span>Sat: {obs.vitals.spo2}%</span>}
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* Condutas / Protocolos */}
+                                            <td className="p-3 align-top">
+                                                <div className="flex flex-col gap-1">
+                                                    {/* Meds */}
+                                                    {(obs.medication?.oxytocinDose || obs.medication?.misoprostolDose) && (
+                                                        <div className="flex gap-1 flex-wrap">
+                                                            {obs.medication.oxytocinDose && <span className="text-[10px] bg-purple-50 text-purple-700 px-1 rounded border border-purple-100">Oxi: {obs.medication.oxytocinDose}</span>}
+                                                            {obs.medication.misoprostolDose && <span className="text-[10px] bg-purple-50 text-purple-700 px-1 rounded border border-purple-100">Miso: {obs.medication.misoprostolDose}</span>}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Mag Protocol */}
+                                                    {obs.magnesiumData && (
+                                                        <div className="text-[10px] text-indigo-600">
+                                                            Refl: {obs.magnesiumData.reflex} | Diu: {obs.magnesiumData.diuresis}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Notes */}
+                                                    {obs.notes && (
+                                                        <span className="text-[10px] text-slate-400 italic truncate max-w-[150px]" title={obs.notes}>
+                                                            "{obs.notes}"
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+
+            {/* 3. Medical Record Text Generator Column */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:col-span-3">
+                <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                        <FileText className="w-4 h-4" /> Copiar para Prontuário
+                    </h4>
+                    <button 
+                        onClick={copyProntuarioToClipboard}
+                        className="text-xs bg-medical-50 text-medical-700 hover:bg-medical-100 px-2 py-1 rounded border border-medical-200 flex items-center gap-1 transition-colors"
+                    >
+                        <Copy className="w-3 h-3" /> Copiar Texto
+                    </button>
+                </div>
+                <div className="flex-1">
+                    {isLoading ? (
+                        <div className="h-full bg-slate-50 rounded animate-pulse h-24"></div>
+                    ) : (
+                        <textarea 
+                            readOnly
+                            className="w-full h-32 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-slate-200"
+                            value={generateProntuarioText(patient, observations)}
+                        />
+                    )}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 text-center">
+                    Formato: Cronológico (Antigo &rarr; Novo). Copie e cole no sistema.
+                </p>
+            </div>
+        </div>
+    );
+};
 
 const OverviewPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -71,213 +322,9 @@ const OverviewPage: React.FC = () => {
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0];
   };
 
-  // --- Logic for Prontuário Text Generation ---
-  const formatToqueVaginal = (o: Observation['obstetric']) => {
-      const parts = [];
-
-      // Apagamento: G or % AP
-      if (o.effacement !== undefined) {
-          parts.push(o.effacement === 0 ? 'G' : `${o.effacement}% AP`);
-      }
-
-      // Posição: P, I, C
-      const posMap: Record<string, string> = { 'Posterior': 'P', 'Intermediário': 'I', 'Central': 'C' };
-      if (o.cervixPosition && posMap[o.cervixPosition]) parts.push(posMap[o.cervixPosition]);
-
-      // Consistência: N, NL, L
-      const conMap: Record<string, string> = { 'Nasal': 'N', 'Nasolabial': 'NL', 'Labial': 'L' };
-      if (o.cervixConsistency && conMap[o.cervixConsistency]) parts.push(conMap[o.cervixConsistency]);
-
-      // Dilatação / Status
-      if (o.dilation !== undefined && o.dilation > 0) {
-          parts.push(`${o.dilation}CM`);
-      } else if (o.cervixStatus && o.cervixStatus.length > 0) {
-          // Join status like OEEA, OII
-          parts.push(o.cervixStatus.join(', '));
-      } else if (o.dilation === 0) {
-          parts.push('0CM');
-      }
-
-      // Altura da Apresentação
-      if (o.presentationHeight) {
-          parts.push(o.presentationHeight);
-      }
-
-      // Sangue
-      if (o.bloodOnGlove !== undefined) {
-          parts.push(o.bloodOnGlove ? 'SDL' : 'SSDL');
-      }
-
-      return parts.length > 0 ? `TOQUE: ${parts.join(', ')}` : '';
-  };
-
-  const generateProntuarioText = (patient: Patient, obsList: Observation[]) => {
-      // Sort Chronologically: Oldest -> Newest
-      const sorted = [...obsList].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      
-      let text = '';
-      let lastDate = '';
-
-      sorted.forEach(o => {
-          const dateObj = new Date(o.timestamp);
-          
-          // Format Date Header: # DD/MM/YY #
-          const day = String(dateObj.getDate()).padStart(2, '0');
-          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-          const year = String(dateObj.getFullYear()).slice(-2);
-          const dateStr = `${day}/${month}/${year}`;
-
-          if (dateStr !== lastDate) {
-              text += `# ${dateStr} #\n`;
-              lastDate = dateStr;
-          }
-
-          const time = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-          const lineParts = [`${time} HS`];
-          
-          // BCF
-          if (o.obstetric.bcf) lineParts.push(`BCF: ${o.obstetric.bcf} BPM`);
-          
-          // PA
-          if (o.vitals.paSystolic) lineParts.push(`PA: ${o.vitals.paSystolic}X${o.vitals.paDiastolic} MMHG`);
-
-          // Dynamics (DU)
-          if (o.obstetric.dinamicaSummary) {
-              // Ensure consistent UPPERCASE for "Ausente", "Presente", etc.
-              lineParts.push(`DU ${o.obstetric.dinamicaSummary.toUpperCase()}`);
-          } else if (o.obstetric.dinamicaFrequency) {
-              lineParts.push(`DU ${o.obstetric.dinamicaFrequency}/10'`);
-          }
-          
-          // Toque
-          const toqueStr = formatToqueVaginal(o.obstetric);
-          if (toqueStr) lineParts.push(toqueStr);
-
-          // Meds (Custom formatting based on example)
-          if (o.medication?.misoprostolDose) lineParts.push(`MISOPROSTOL ${o.medication.misoprostolDose}MCG`);
-          if (o.medication?.oxytocinDose) lineParts.push(`OCITOCINA ${o.medication.oxytocinDose} ML/H`);
-
-          // Mag Protocol
-          if (o.magnesiumData) {
-              if (o.magnesiumData.diuresis) lineParts.push(`DIURESE ${o.magnesiumData.diuresis}`);
-              if (o.magnesiumData.reflex) lineParts.push(`REFLEXO ${o.magnesiumData.reflex.toUpperCase()}`);
-          }
-
-          // Notes
-          if (o.notes) lineParts.push(o.notes.toUpperCase());
-
-          // Join with pipe separator
-          text += lineParts.join(' | ') + '\n';
-      });
-
-      // Special Footer for Partogram Opened
-      if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
-          text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
-      }
-
-      return text;
-  };
-
-  const copyProntuarioToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text);
-      alert('Texto copiado para a área de transferência!');
-  };
-
   if (loading) {
       return <div className="p-12 text-center text-slate-400">Carregando painel...</div>;
   }
-
-  // Helper component for expanded content (Shared between Mobile and Desktop)
-  const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patient, observations: Observation[], isLoading: boolean }) => (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
-          
-          {/* 1. Charts Column */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
-                  <Activity className="w-4 h-4" /> Gráficos de Tendência
-              </h4>
-              {isLoading ? (
-                  <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Carregando...</div>
-              ) : (
-                  <div className="h-64 overflow-y-auto custom-scrollbar">
-                      <VitalCharts observations={observations} />
-                  </div>
-              )}
-          </div>
-
-          {/* 2. History List Column */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-              <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
-                  <Clipboard className="w-4 h-4" /> Histórico Recente
-              </h4>
-              <div className="flex-1 overflow-y-auto max-h-64 custom-scrollbar">
-                  {isLoading ? (
-                      <div className="text-center py-8 text-slate-400">...</div>
-                  ) : observations.length === 0 ? (
-                      <div className="text-center py-8 text-slate-400 italic text-sm">Sem registros.</div>
-                  ) : (
-                      <table className="w-full text-xs">
-                          <thead className="bg-slate-50 text-slate-500 sticky top-0">
-                              <tr>
-                                  <th className="p-2 text-left">Hora</th>
-                                  <th className="p-2 text-left">BCF</th>
-                                  <th className="p-2 text-left">PA</th>
-                                  <th className="p-2 text-left">Dilat</th>
-                              </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                              {observations.slice(0, 10).map(obs => (
-                                  <tr key={obs.id}>
-                                      <td className="p-2 font-bold text-slate-700">
-                                          {new Date(obs.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                      </td>
-                                      <td className={`p-2 ${
-                                          obs.obstetric.bcf !== undefined && (obs.obstetric.bcf < 110 || obs.obstetric.bcf > 160)
-                                          ? 'text-red-600 font-bold'
-                                          : ''
-                                      }`}>
-                                          {obs.obstetric.bcf || '-'}
-                                      </td>
-                                      <td className="p-2">{obs.vitals.paSystolic ? `${obs.vitals.paSystolic}x${obs.vitals.paDiastolic}` : '-'}</td>
-                                      <td className="p-2">{obs.obstetric.dilation ? `${obs.obstetric.dilation}cm` : (obs.obstetric.cervixStatus && obs.obstetric.cervixStatus.length > 0 ? obs.obstetric.cervixStatus[0] : '-')}</td>
-                                  </tr>
-                              ))}
-                          </tbody>
-                      </table>
-                  )}
-              </div>
-          </div>
-
-          {/* 3. Medical Record Text Generator Column */}
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col">
-              <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                      <FileText className="w-4 h-4" /> Copiar para Prontuário
-                  </h4>
-                  <button 
-                      onClick={() => copyProntuarioToClipboard(generateProntuarioText(patient, observations))}
-                      className="text-xs bg-medical-50 text-medical-700 hover:bg-medical-100 px-2 py-1 rounded border border-medical-200 flex items-center gap-1 transition-colors"
-                  >
-                      <Copy className="w-3 h-3" /> Copiar Texto
-                  </button>
-              </div>
-              <div className="flex-1">
-                  {isLoading ? (
-                      <div className="h-full bg-slate-50 rounded animate-pulse"></div>
-                  ) : (
-                      <textarea 
-                          readOnly
-                          className="w-full h-64 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-slate-200"
-                          value={generateProntuarioText(patient, observations)}
-                      />
-                  )}
-              </div>
-              <p className="text-[10px] text-slate-400 mt-2 text-center">
-                  Formato: Cronológico (Antigo &rarr; Novo). Copie e cole no sistema.
-              </p>
-          </div>
-      </div>
-  );
 
   return (
     <div className="space-y-6 pb-24">
