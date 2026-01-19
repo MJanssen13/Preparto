@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, LogOut, Clock, BedDouble, AlertCircle, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, FileCheck, CheckCircle2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, ArchiveX } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -12,7 +12,6 @@ const PatientDetails: React.FC = () => {
   const [patient, setPatient] = useState<Patient | undefined>(undefined);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showResolutionMenu, setShowResolutionMenu] = useState(false);
 
   useEffect(() => {
     if (id) loadData(id);
@@ -29,20 +28,17 @@ const PatientDetails: React.FC = () => {
     setLoading(false);
   };
 
-  const handleResolution = async (type: 'partogram' | 'discharge') => {
+  const handleEndMonitoring = async () => {
     if (!patient || !id) return;
     
-    const message = type === 'partogram' 
-        ? 'Deseja marcar como "Aberto Partograma"? As aferições pendentes serão removidas do cronograma.'
-        : 'Deseja realmente dar alta/transferência? O paciente sairá da lista ativa.';
-
-    if (confirm(message)) {
+    if (confirm('Deseja encerrar o acompanhamento deste paciente? \n\nEle será removido do painel ativo e do cronograma, mas permanecerá no histórico de resolvidos.')) {
       try {
           // Use dedicated service method to ensure atomic update of status and schedule cancellation
-          await patientService.resolvePatient(id, type === 'partogram' ? PatientStatus.PARTOGRAM_OPENED : PatientStatus.DISCHARGED);
+          // We maps "Encerrar" to DISCHARGED as the generic resolved status
+          await patientService.resolvePatient(id, PatientStatus.DISCHARGED);
           navigate('/');
       } catch (error) {
-          console.error("Erro ao resolver paciente:", error);
+          console.error("Erro ao encerrar acompanhamento:", error);
           alert("Erro ao atualizar status. Tente novamente.");
       }
     }
@@ -135,42 +131,17 @@ const PatientDetails: React.FC = () => {
         </div>
         
         {!isResolved ? (
-            <div className="relative">
-                <button 
-                    onClick={() => setShowResolutionMenu(!showResolutionMenu)}
-                    className="flex flex-col items-center justify-center p-2 text-medical-600 bg-medical-50 hover:bg-medical-100 rounded-lg border border-medical-100 transition-colors"
-                >
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span className="text-[10px] font-bold">Resolução</span>
-                </button>
-
-                {showResolutionMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                        <button 
-                            onClick={() => handleResolution('partogram')}
-                            className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 border-b border-slate-100 flex items-center gap-2"
-                        >
-                            <FileCheck className="w-4 h-4 text-green-600" />
-                            Aberto Partograma
-                        </button>
-                        <button 
-                            onClick={() => handleResolution('discharge')}
-                            className="w-full text-left px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                        >
-                            <LogOut className="w-4 h-4 text-red-500" />
-                            Via Alta / Transferência
-                        </button>
-                    </div>
-                )}
-                
-                {/* Backdrop to close menu */}
-                {showResolutionMenu && (
-                    <div className="fixed inset-0 z-40" onClick={() => setShowResolutionMenu(false)}></div>
-                )}
-            </div>
+            <button 
+                onClick={handleEndMonitoring}
+                className="flex flex-col items-center justify-center p-2 text-slate-600 bg-slate-50 hover:bg-slate-100 hover:text-red-600 hover:border-red-200 rounded-lg border border-slate-200 transition-colors"
+                title="Encerrar Acompanhamento"
+            >
+                <ArchiveX className="w-5 h-5" />
+                <span className="text-[10px] font-bold">Encerrar</span>
+            </button>
         ) : (
             <div className="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-bold uppercase">
-                {patient.status === PatientStatus.PARTOGRAM_OPENED ? 'Em Partograma' : 'Alta/Transf.'}
+                Encerrado
             </div>
         )}
       </div>
@@ -180,8 +151,8 @@ const PatientDetails: React.FC = () => {
           <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex items-center gap-3 text-slate-600">
               <CheckCircle2 className="w-5 h-5 text-green-500" />
               <div className="text-sm">
-                  <p className="font-bold text-slate-800">Paciente Resolvida</p>
-                  <p className="text-xs">O acompanhamento foi encerrado. O histórico será excluído automaticamente após 72h.</p>
+                  <p className="font-bold text-slate-800">Acompanhamento Encerrado</p>
+                  <p className="text-xs">Este paciente foi removido da lista ativa. O histórico permanece disponível na visão geral.</p>
               </div>
           </div>
       )}
