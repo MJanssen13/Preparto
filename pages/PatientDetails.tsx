@@ -34,13 +34,19 @@ const PatientDetails: React.FC = () => {
     if (!patient || !id) return;
     
     const message = type === 'partogram' 
-        ? 'Deseja marcar como "Aberto Partograma"? O paciente ficará disponível no painel por 72h.'
+        ? 'Deseja marcar como "Aberto Partograma"? As aferições agendadas pendentes serão canceladas.'
         : 'Deseja realmente dar alta/transferência? O histórico será excluído após 72h.';
 
     if (confirm(message)) {
+      // Cancelar todas as tarefas pendentes no cronograma
+      const updatedSchedule = (patient.schedule || []).map(task => 
+          task.status === 'pending' ? { ...task, status: 'cancelled' as const } : task
+      );
+
       await patientService.updatePatient(id, { 
           status: type === 'partogram' ? PatientStatus.PARTOGRAM_OPENED : PatientStatus.DISCHARGED,
-          dischargeTime: new Date().toISOString()
+          dischargeTime: new Date().toISOString(),
+          schedule: updatedSchedule
       });
       navigate('/');
     }

@@ -41,7 +41,7 @@ const ObservationForm: React.FC = () => {
     cervixPosition: '',
     cervixConsistency: '',
     presentationHeight: '', // NEW: AM | INS
-    membranes: MembraneStatus.INTACT,
+    membranes: '' as MembraneStatus | '', // CHANGED: Default is empty, not INTACT
     bloodOnGlove: false, // NEW: SDL (true) / SSDL (false)
     paSys: '',
     paDia: '',
@@ -204,7 +204,7 @@ const ObservationForm: React.FC = () => {
                        cervixPosition: obs.obstetric.cervixPosition || '',
                        cervixConsistency: obs.obstetric.cervixConsistency || '',
                        presentationHeight: obs.obstetric.presentationHeight || '',
-                       membranes: obs.obstetric.membranes || MembraneStatus.INTACT,
+                       membranes: obs.obstetric.membranes || '' as MembraneStatus,
                        bloodOnGlove: obs.obstetric.bloodOnGlove || false,
                        paSys: obs.vitals.paSystolic !== undefined ? String(obs.vitals.paSystolic) : '',
                        paDia: obs.vitals.paDiastolic !== undefined ? String(obs.vitals.paDiastolic) : '',
@@ -291,7 +291,8 @@ const ObservationForm: React.FC = () => {
           cervixPosition: activeParams.includes('Toque') ? (formData.cervixPosition as any) : undefined,
           cervixConsistency: activeParams.includes('Toque') ? (formData.cervixConsistency as any) : undefined,
           presentationHeight: activeParams.includes('Toque') ? (formData.presentationHeight as any) : undefined,
-          membranes: activeParams.includes('Toque') ? formData.membranes : undefined,
+          // Only send membranes if Toque is active AND user selected a value (not empty string)
+          membranes: activeParams.includes('Toque') && formData.membranes !== '' ? (formData.membranes as MembraneStatus) : undefined,
           bloodOnGlove: activeParams.includes('Toque') ? formData.bloodOnGlove : undefined
         },
         medication: {
@@ -588,6 +589,7 @@ const ObservationForm: React.FC = () => {
                     <div>
                          <label className="block text-xs font-medium text-slate-500 mb-1">Bolsa</label>
                          <select name="membranes" className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm" value={formData.membranes} onChange={handleChange}>
+                             <option value="">Não avaliado</option>
                              <option value={MembraneStatus.INTACT}>Íntegras</option>
                              <option value={MembraneStatus.RUPTURED_CLEAR}>Rotas Claras</option>
                              <option value={MembraneStatus.RUPTURED_MECONIUM}>Rotas Meconiais</option>
