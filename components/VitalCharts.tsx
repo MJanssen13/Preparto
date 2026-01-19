@@ -74,8 +74,8 @@ export const VitalCharts: React.FC<VitalChartsProps> = ({ observations }) => {
                 <YAxis yAxisId="right" orientation="right" domain={[0, 10]} tick={{ fontSize: 10 }} stroke="#94a3b8" />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '10px' }} />
-                <ReferenceLine y={110} yAxisId="left" stroke="red" strokeDasharray="3 3" opacity={0.3} />
-                <ReferenceLine y={160} yAxisId="left" stroke="red" strokeDasharray="3 3" opacity={0.3} />
+                <ReferenceLine y={110} yAxisId="left" stroke="red" strokeDasharray="3 3" opacity={0.3} label={{ value: '110', fontSize: 10, fill: 'red', opacity: 0.5, position: 'insideLeft' }} />
+                <ReferenceLine y={160} yAxisId="left" stroke="red" strokeDasharray="3 3" opacity={0.3} label={{ value: '160', fontSize: 10, fill: 'red', opacity: 0.5, position: 'insideLeft' }} />
                 
                 <Line 
                     yAxisId="left"

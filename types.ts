@@ -1,8 +1,11 @@
+
+
 export enum PatientStatus {
   ADMISSION = 'Admissão',
   ACTIVE_LABOR = 'Trabalho de Parto Ativo',
   INDUCTION = 'Indução',
   POSTPARTUM = 'Puerpério Imediato',
+  PARTOGRAM_OPENED = 'Partograma Aberto',
   DISCHARGED = 'Alta/Transferência'
 }
 
@@ -33,12 +36,15 @@ export interface ObstetricData {
   
   // Toque Vaginal Completo
   dilation?: number; // Dilatação cervical (0-10 cm)
-  effacement?: number; // Apagamento (%)
+  cervixStatus?: string[]; // Para casos sem dilatação numérica: ['OEI', 'OEEA', 'OII']
+  effacement?: number; // Apagamento (%) - 0 será tratado como "Grosso" (G)
   cervixPosition?: 'Posterior' | 'Intermediário' | 'Central';
   cervixConsistency?: 'Nasal' | 'Nasolabial' | 'Labial';
+  presentationHeight?: 'AM' | 'INS'; // Novo: Alto e Móvel (AM) ou Insinuado (INS)
   station?: number; // Plano de De Lee (-4 a +4)
   
-  membranes: MembraneStatus;
+  membranes?: MembraneStatus;
+  bloodOnGlove?: boolean; // Sangue em dedo de luva (SDL) ou Sem sangue (SSDL)
 }
 
 export interface MagnesiumData {
@@ -87,6 +93,7 @@ export interface Patient {
   riskFactors?: string[];
   useMethyldopa?: boolean; // Indica uso de Metildopa
   useMagnesiumSulfate?: boolean; // Indica uso de Sulfato de Magnésio
+  dischargeTime?: string; // Data/Hora da alta para cálculo de expiração (72h)
   lastObservation?: Observation;
   schedule: ScheduledTask[]; // Novo sistema de agendamento
 }

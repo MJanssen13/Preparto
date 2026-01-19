@@ -16,6 +16,9 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
     .filter(t => t.status === 'pending')
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0];
 
+  // Helper to check BCF abnormality
+  const isBcfAbnormal = lastObs?.obstetric.bcf !== undefined && (lastObs.obstetric.bcf < 110 || lastObs.obstetric.bcf > 160);
+
   return (
     <Link to={`/patient/${patient.id}`} className="block">
       <div className={`bg-white rounded-xl shadow-sm border p-4 active:scale-[0.98] transition-transform duration-150 relative overflow-hidden ${isDischarged ? 'border-slate-200 opacity-60' : 'border-slate-200'}`}>
@@ -47,10 +50,10 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
 
           <div className="bg-slate-50 p-2 rounded-lg flex flex-col items-center justify-center border border-slate-100">
             <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
-              <Activity className="w-3 h-3 text-rose-500" />
+              <Activity className={`w-3 h-3 ${isBcfAbnormal ? 'text-red-500' : 'text-rose-500'}`} />
               <span>BCF</span>
             </div>
-            <span className="font-bold text-slate-700">
+            <span className={`font-bold ${isBcfAbnormal ? 'text-red-600' : 'text-slate-700'}`}>
               {lastObs && lastObs.obstetric.bcf !== undefined ? lastObs.obstetric.bcf : '-'}
             </span>
           </div>

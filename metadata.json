@@ -1,5 +1,7 @@
 {
   "name": "Pré Parto",
   "description": "Plataforma de acompanhamento de plantão obstétrico com foco em monitoramento de pré-parto (BCF, Dinâmica, PA, Dilatação).",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera"
+  ]
 }
