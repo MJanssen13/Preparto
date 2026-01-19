@@ -170,9 +170,9 @@ export const patientService = {
       const currentPatient = await this.getPatientById(id);
       if (!currentPatient) throw new Error('Patient not found');
 
-      // 2. Cancel all pending tasks
-      const updatedSchedule = (currentPatient.schedule || []).map(task => 
-          task.status === 'pending' ? { ...task, status: 'cancelled' as const } : task
+      // 2. Remove all pending tasks (Deletion requested)
+      const updatedSchedule = (currentPatient.schedule || []).filter(task => 
+          task.status !== 'pending'
       );
 
       // 3. Update DB
