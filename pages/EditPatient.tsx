@@ -2,14 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
-import { Patient } from '../types';
-import { ArrowLeft, Pill, Beaker, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { Patient, PatientStatus } from '../types';
+import { ArrowLeft, Pill, Beaker, Save, Trash2, AlertTriangle, Lock } from 'lucide-react';
 
 const EditPatient: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [patientStatus, setPatientStatus] = useState<PatientStatus | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -23,6 +24,7 @@ const EditPatient: React.FC = () => {
     if (id) {
         patientService.getPatientById(id).then(p => {
             if (p) {
+                setPatientStatus(p.status);
                 setFormData({
                     name: p.name,
                     bed: p.bed,
@@ -80,6 +82,8 @@ const EditPatient: React.FC = () => {
 
   if (loading) return <div className="p-8 text-center">Carregando...</div>;
 
+  const isResolved = patientStatus === PatientStatus.DISCHARGED || patientStatus === PatientStatus.PARTOGRAM_OPENED;
+
   return (
     <div className="max-w-lg mx-auto pb-20">
       <div className="flex items-center gap-4 mb-6">
@@ -88,6 +92,16 @@ const EditPatient: React.FC = () => {
         </button>
         <h1 className="text-xl font-bold text-slate-900">Editar Paciente</h1>
       </div>
+      
+      {isResolved && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+              <Lock className="w-5 h-5 text-amber-600 mt-0.5" />
+              <div>
+                  <h3 className="font-bold text-amber-800 text-sm">Paciente Resolvido</h3>
+                  <p className="text-xs text-amber-700">As edições são permitidas, mas este paciente não aparece mais na lista ativa. Você pode excluí-lo abaixo.</p>
+              </div>
+          </div>
+      )}
 
       <div className="space-y-6">
           <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">

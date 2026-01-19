@@ -1,5 +1,4 @@
 
-
 import { Patient, Observation, PatientStatus } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
@@ -163,6 +162,25 @@ export const patientService = {
     const { data, error } = await supabase.from('patients').update(dbPayload).eq('id', id).select().single();
     if (error) return null;
     return mapPatientFromDB(data);
+  },
+
+  // Dedicated method to handle resolution logic atomically
+  async resolvePatient(id: string, newStatus: PatientStatus): Promise<void> {
+      // 1. Fetch current patient to get the latest schedule
+      const currentPatient = await this.getPatientById(id);
+      if (!currentPatient) throw new Error('Patient not found');
+
+      // 2. Cancel all pending tasks
+      const updatedSchedule = (currentPatient.schedule || []).map(task => 
+          task.status === 'pending' ? { ...task, status: 'cancelled' as const } : task
+      );
+
+      // 3. Update DB
+      await this.updatePatient(id, {
+          status: newStatus,
+          dischargeTime: new Date().toISOString(),
+          schedule: updatedSchedule
+      });
   },
 
   async deletePatient(id: string): Promise<void> {

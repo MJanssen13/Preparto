@@ -1,10 +1,9 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, LogOut, Clock, BedDouble, AlertCircle, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, FileCheck, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, LogOut, Clock, BedDouble, AlertCircle, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, FileCheck, CheckCircle2, Trash2 } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -34,23 +33,13 @@ const PatientDetails: React.FC = () => {
     if (!patient || !id) return;
     
     const message = type === 'partogram' 
-        ? 'Deseja marcar como "Aberto Partograma"? O paciente sairá da lista ativa.'
-        : 'Deseja realmente dar alta/transferência? O histórico será excluído após 72h.';
+        ? 'Deseja marcar como "Aberto Partograma"? As aferições pendentes serão removidas do cronograma.'
+        : 'Deseja realmente dar alta/transferência? O paciente sairá da lista ativa.';
 
     if (confirm(message)) {
       try {
-          // 1. Cancel pending tasks
-          const updatedSchedule = (patient.schedule || []).map(task => 
-              task.status === 'pending' ? { ...task, status: 'cancelled' as const } : task
-          );
-
-          // 2. Update status and schedule
-          await patientService.updatePatient(id, { 
-              status: type === 'partogram' ? PatientStatus.PARTOGRAM_OPENED : PatientStatus.DISCHARGED,
-              dischargeTime: new Date().toISOString(),
-              schedule: updatedSchedule
-          });
-          
+          // Use dedicated service method to ensure atomic update of status and schedule cancellation
+          await patientService.resolvePatient(id, type === 'partogram' ? PatientStatus.PARTOGRAM_OPENED : PatientStatus.DISCHARGED);
           navigate('/');
       } catch (error) {
           console.error("Erro ao resolver paciente:", error);
@@ -102,7 +91,7 @@ const PatientDetails: React.FC = () => {
 
   const isResolved = patient.status === PatientStatus.DISCHARGED || patient.status === PatientStatus.PARTOGRAM_OPENED;
   
-  // Pending tasks
+  // Pending tasks - Filter out cancelled tasks just in case, though they should be updated in DB
   const pendingTasks = (patient.schedule || [])
     .filter(t => t.status === 'pending')
     .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -117,15 +106,15 @@ const PatientDetails: React.FC = () => {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-                <span className="bg-medical-100 text-medical-700 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1">
+                <span className={`px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 ${isResolved ? 'bg-slate-200 text-slate-600' : 'bg-medical-100 text-medical-700'}`}>
                     <BedDouble className="w-3 h-3" /> Leito {patient.bed}
                 </span>
                 <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
-                {!isResolved && (
-                    <Link to={`/patient/${id}/edit`} className="text-slate-400 hover:text-medical-600 p-1">
-                        <Edit2 className="w-4 h-4" />
-                    </Link>
-                )}
+                
+                {/* Always show Edit button to allow Deletion, even if resolved */}
+                <Link to={`/patient/${id}/edit`} className="text-slate-400 hover:text-medical-600 p-1">
+                    <Edit2 className="w-4 h-4" />
+                </Link>
             </div>
             <p className="text-sm text-slate-500">
               {patient.parity} • {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}d
@@ -145,7 +134,7 @@ const PatientDetails: React.FC = () => {
           </div>
         </div>
         
-        {!isResolved && (
+        {!isResolved ? (
             <div className="relative">
                 <button 
                     onClick={() => setShowResolutionMenu(!showResolutionMenu)}
@@ -179,10 +168,25 @@ const PatientDetails: React.FC = () => {
                     <div className="fixed inset-0 z-40" onClick={() => setShowResolutionMenu(false)}></div>
                 )}
             </div>
+        ) : (
+            <div className="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-bold uppercase">
+                {patient.status === PatientStatus.PARTOGRAM_OPENED ? 'Em Partograma' : 'Alta/Transf.'}
+            </div>
         )}
       </div>
 
-      {/* Next Observations List */}
+      {/* Resolved Banner */}
+      {isResolved && (
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex items-center gap-3 text-slate-600">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              <div className="text-sm">
+                  <p className="font-bold text-slate-800">Paciente Resolvida</p>
+                  <p className="text-xs">O acompanhamento foi encerrado. O histórico será excluído automaticamente após 72h.</p>
+              </div>
+          </div>
+      )}
+
+      {/* Next Observations List (Only if not resolved) */}
       {!isResolved && pendingTasks.length > 0 && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 relative overflow-hidden">
            <div className="flex items-center gap-2 text-blue-800 font-bold text-sm mb-3">
