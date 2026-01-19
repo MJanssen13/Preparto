@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, ScheduledTask } from '../types';
 import { patientService } from '../services/supabaseService';
@@ -29,9 +30,9 @@ const SchedulePage: React.FC = () => {
     setLoading(false);
   };
 
-  // Flatten pending tasks from all active patients
+  // Filter tasks: Exclude patients who are Discharged OR Partogram Opened
   const tasks: DashboardTask[] = patients
-    .filter(p => p.status !== PatientStatus.DISCHARGED)
+    .filter(p => p.status !== PatientStatus.DISCHARGED && p.status !== PatientStatus.PARTOGRAM_OPENED)
     .flatMap(p => 
       (p.schedule || [])
         .filter(t => t.status === 'pending')

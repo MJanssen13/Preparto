@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
@@ -23,6 +24,7 @@ const PatientsPage: React.FC = () => {
 
   const activePatients = patients.filter(p => 
     p.status !== PatientStatus.DISCHARGED &&
+    p.status !== PatientStatus.PARTOGRAM_OPENED &&
     (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
      p.bed.toLowerCase().includes(searchTerm.toLowerCase()))
   );

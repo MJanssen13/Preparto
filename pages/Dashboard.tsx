@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, ScheduledTask } from '../types';
 import { patientService } from '../services/supabaseService';
@@ -31,8 +32,10 @@ const Dashboard: React.FC = () => {
     setLoading(false);
   };
 
+  // Filter: Active patients are those NOT Discharged AND NOT Partogram Opened
   const activePatients = patients.filter(p => 
     p.status !== PatientStatus.DISCHARGED &&
+    p.status !== PatientStatus.PARTOGRAM_OPENED &&
     (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
      p.bed.toLowerCase().includes(searchTerm.toLowerCase()))
   );
