@@ -126,7 +126,7 @@ const PatientDetails: React.FC = () => {
   
   // Display Status Helpers
   let statusIcon = <CheckCircle2 className="w-5 h-5" />;
-  let statusText = patient.status;
+  let statusText: string = patient.status;
   let statusColor = "bg-slate-50 border-slate-200 text-slate-600";
   
   if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
