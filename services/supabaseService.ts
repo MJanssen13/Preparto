@@ -57,7 +57,8 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     ...(p.magnesiumSulfateEndTime !== undefined && { magnesium_sulfate_end_time: p.magnesiumSulfateEndTime }),
 
     ...(p.dischargeTime && { discharge_time: p.dischargeTime }),
-    ...(p.schedule && { schedule: p.schedule }),
+    // Check explicitly for array to allow sending empty arrays
+    ...(Array.isArray(p.schedule) && { schedule: p.schedule }),
     ...(p.lastObservation && { last_observation: p.lastObservation })
   };
 };
@@ -176,7 +177,10 @@ export const patientService = {
     }
     const dbPayload = mapPatientToDB(updates);
     const { data, error } = await supabase.from('patients').update(dbPayload).eq('id', id).select().single();
-    if (error) return null;
+    if (error) {
+        console.error("Supabase update error:", error);
+        return null;
+    }
     return mapPatientFromDB(data);
   },
 
@@ -192,11 +196,13 @@ export const patientService = {
       );
 
       // 3. Update DB
-      await this.updatePatient(id, {
+      const result = await this.updatePatient(id, {
           status: newStatus,
           dischargeTime: new Date().toISOString(),
           schedule: updatedSchedule
       });
+
+      if (!result) throw new Error('Failed to resolve patient');
   },
 
   async deletePatient(id: string): Promise<void> {
