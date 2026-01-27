@@ -42,7 +42,10 @@ const PatientDetails: React.FC = () => {
           loadData(id);
       } catch (error: any) {
           console.error("Erro ao resolver paciente:", error);
-          alert(`Erro ao atualizar status: ${error.message || 'Erro desconhecido'}. Verifique o console para mais detalhes.`);
+          // Show detailed Supabase error if available
+          const errorMessage = error.message || 'Erro desconhecido';
+          const details = error.details || error.hint || '';
+          alert(`ERRO DE BANCO DE DADOS:\n${errorMessage}\n${details}\n\nVerifique o console (F12) para o JSON completo do erro.`);
       }
   };
 

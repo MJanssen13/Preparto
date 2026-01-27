@@ -263,8 +263,9 @@ export const patientService = {
     const { data, error } = await supabase.from('patients').update(dbPayload).eq('id', id).select().single();
     if (error) {
         // --- LOGGING THE SUPABASE ERROR FOR DEBUGGING ---
-        console.error("Supabase update error:", error);
-        return null;
+        // Use JSON.stringify to see the full error object structure in console
+        console.error("Supabase update error:", JSON.stringify(error, null, 2));
+        throw error; // Throw so we can catch it in the component
     }
     return mapPatientFromDB(data);
   },
