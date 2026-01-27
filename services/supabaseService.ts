@@ -46,8 +46,16 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     ...(p.status && { status: p.status }),
     ...(p.bloodType && { blood_type: p.bloodType }),
     ...(p.riskFactors && { risk_factors: p.riskFactors }),
+    
+    // Protocols
     ...(p.useMethyldopa !== undefined && { use_methyldopa: p.useMethyldopa }),
+    ...(p.methyldopaStartTime !== undefined && { methyldopa_start_time: p.methyldopaStartTime }),
+    ...(p.methyldopaEndTime !== undefined && { methyldopa_end_time: p.methyldopaEndTime }),
+    
     ...(p.useMagnesiumSulfate !== undefined && { use_magnesium_sulfate: p.useMagnesiumSulfate }),
+    ...(p.magnesiumSulfateStartTime !== undefined && { magnesium_sulfate_start_time: p.magnesiumSulfateStartTime }),
+    ...(p.magnesiumSulfateEndTime !== undefined && { magnesium_sulfate_end_time: p.magnesiumSulfateEndTime }),
+
     ...(p.dischargeTime && { discharge_time: p.dischargeTime }),
     ...(p.schedule && { schedule: p.schedule }),
     ...(p.lastObservation && { last_observation: p.lastObservation })
@@ -67,8 +75,16 @@ const mapPatientFromDB = (db: any): Patient => {
     status: db.status,
     bloodType: db.blood_type,
     riskFactors: db.risk_factors,
+    
+    // Protocols
     useMethyldopa: db.use_methyldopa,
+    methyldopaStartTime: db.methyldopa_start_time,
+    methyldopaEndTime: db.methyldopa_end_time,
+    
     useMagnesiumSulfate: db.use_magnesium_sulfate,
+    magnesiumSulfateStartTime: db.magnesium_sulfate_start_time,
+    magnesiumSulfateEndTime: db.magnesium_sulfate_end_time,
+
     dischargeTime: db.discharge_time,
     schedule: db.schedule || [],
     lastObservation: db.last_observation

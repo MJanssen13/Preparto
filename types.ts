@@ -1,5 +1,4 @@
 
-
 export enum PatientStatus {
   ADMISSION = 'Admissão',
   ACTIVE_LABOR = 'Trabalho de Parto Ativo',
@@ -91,8 +90,16 @@ export interface Patient {
   status: PatientStatus;
   bloodType?: string;
   riskFactors?: string[];
-  useMethyldopa?: boolean; // Indica uso de Metildopa
-  useMagnesiumSulfate?: boolean; // Indica uso de Sulfato de Magnésio
+  
+  // Protocols
+  useMethyldopa?: boolean; // Indicates currently active
+  methyldopaStartTime?: string;
+  methyldopaEndTime?: string;
+
+  useMagnesiumSulfate?: boolean; // Indicates currently active
+  magnesiumSulfateStartTime?: string;
+  magnesiumSulfateEndTime?: string;
+
   dischargeTime?: string; // Data/Hora da alta para cálculo de expiração (72h)
   lastObservation?: Observation;
   schedule: ScheduledTask[]; // Novo sistema de agendamento

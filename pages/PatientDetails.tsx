@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, ArchiveX } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2 } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -28,20 +28,22 @@ const PatientDetails: React.FC = () => {
     setLoading(false);
   };
 
-  const handleEndMonitoring = async () => {
-    if (!patient || !id) return;
-    
-    if (confirm('Deseja encerrar o acompanhamento deste paciente? \n\nEle será removido do painel ativo e do cronograma, mas permanecerá no histórico de resolvidos.')) {
-      try {
-          // Use dedicated service method to ensure atomic update of status and schedule cancellation
-          // We maps "Encerrar" to DISCHARGED as the generic resolved status
-          await patientService.resolvePatient(id, PatientStatus.DISCHARGED);
-          navigate('/');
-      } catch (error) {
-          console.error("Erro ao encerrar acompanhamento:", error);
-          alert("Erro ao atualizar status. Tente novamente.");
+  const handleResolution = async () => {
+      if (!patient || !id) return;
+      
+      if (!window.confirm("Confirmar resolução do caso? As evoluções futuras agendadas serão canceladas.")) {
+          return;
       }
-    }
+
+      try {
+          // This service call automatically removes pending scheduled tasks and sets discharge time
+          await patientService.resolvePatient(id, PatientStatus.DISCHARGED);
+          // Reload local data to reflect changes immediately
+          loadData(id);
+      } catch (error) {
+          console.error("Erro ao resolver paciente:", error);
+          alert("Erro ao atualizar status.");
+      }
   };
 
   const formatToqueVaginal = (o: Observation['obstetric']) => {
@@ -69,9 +71,13 @@ const PatientDetails: React.FC = () => {
           parts.push('0CM');
       }
 
-      // Altura da Apresentação
-      if (o.presentationHeight) {
-          parts.push(o.presentationHeight);
+      // Station / De Lee
+      if (o.station !== undefined) {
+          if (o.station === -4) {
+              parts.push('AM'); // Alto e Móvel
+          } else {
+              parts.push(`De Lee ${o.station > 0 ? '+' : ''}${o.station}`);
+          }
       }
 
       // Sangue
@@ -87,7 +93,7 @@ const PatientDetails: React.FC = () => {
 
   const isResolved = patient.status === PatientStatus.DISCHARGED || patient.status === PatientStatus.PARTOGRAM_OPENED;
   
-  // Pending tasks - Filter out cancelled tasks just in case, though they should be updated in DB
+  // Pending tasks
   const pendingTasks = (patient.schedule || [])
     .filter(t => t.status === 'pending')
     .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -107,7 +113,6 @@ const PatientDetails: React.FC = () => {
                 </span>
                 <h1 className="text-xl font-bold text-slate-900">{patient.name}</h1>
                 
-                {/* Always show Edit button to allow Deletion, even if resolved */}
                 <Link to={`/patient/${id}/edit`} className="text-slate-400 hover:text-medical-600 p-1">
                     <Edit2 className="w-4 h-4" />
                 </Link>
@@ -115,44 +120,49 @@ const PatientDetails: React.FC = () => {
             <p className="text-sm text-slate-500">
               {patient.parity} • {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}d
             </p>
-            <div className="flex flex-wrap gap-1 mt-1">
+            <div className="flex flex-wrap gap-2 mt-1">
+                {/* Protocols Badges */}
                 {patient.useMethyldopa && (
-                <span className="text-[10px] bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded-full font-bold border border-blue-100 flex items-center gap-1">
-                    <Pill className="w-3 h-3" /> Metildopa
-                </span>
+                    <span className="text-[10px] bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded-full font-bold border border-blue-100 flex items-center gap-1">
+                        <Pill className="w-3 h-3" /> Metildopa
+                    </span>
                 )}
                 {patient.useMagnesiumSulfate && (
-                <span className="text-[10px] bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded-full font-bold border border-purple-100 flex items-center gap-1">
-                    <Beaker className="w-3 h-3" /> MgSO4
-                </span>
+                    <span className="text-[10px] bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded-full font-bold border border-purple-100 flex items-center gap-1">
+                        <Beaker className="w-3 h-3" /> MgSO4
+                    </span>
                 )}
             </div>
           </div>
         </div>
         
         {!isResolved ? (
-            <button 
-                onClick={handleEndMonitoring}
-                className="flex flex-col items-center justify-center p-2 text-slate-600 bg-slate-50 hover:bg-slate-100 hover:text-red-600 hover:border-red-200 rounded-lg border border-slate-200 transition-colors"
-                title="Encerrar Acompanhamento"
-            >
-                <ArchiveX className="w-5 h-5" />
-                <span className="text-[10px] font-bold">Encerrar</span>
-            </button>
+             <button 
+                onClick={handleResolution}
+                className="flex flex-col items-center justify-center p-2 text-medical-700 bg-medical-50 hover:bg-medical-100 rounded-lg border border-medical-200 transition-colors shadow-sm"
+             >
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="text-[10px] font-bold">Resolução</span>
+             </button>
         ) : (
-            <div className="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-bold uppercase">
-                Encerrado
+             <div className="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-bold uppercase flex flex-col items-end">
+                <span>{patient.status === PatientStatus.PARTOGRAM_OPENED ? 'Partograma' : 'Resolvido'}</span>
+                <span className="text-[9px] font-normal">{new Date(patient.dischargeTime || '').toLocaleDateString()}</span>
             </div>
         )}
       </div>
 
       {/* Resolved Banner */}
       {isResolved && (
-          <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex items-center gap-3 text-slate-600">
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
+          <div className={`border p-4 rounded-xl flex items-center gap-3 ${patient.status === PatientStatus.PARTOGRAM_OPENED ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+              <CheckCircle2 className="w-5 h-5" />
               <div className="text-sm">
-                  <p className="font-bold text-slate-800">Acompanhamento Encerrado</p>
-                  <p className="text-xs">Este paciente foi removido da lista ativa. O histórico permanece disponível na visão geral.</p>
+                  <p className="font-bold">Caso Resolvido</p>
+                  <p className="text-xs opacity-80">
+                      Data: {new Date(patient.dischargeTime || '').toLocaleString()}
+                      <br/>
+                      Cronograma futuro cancelado automaticamente.
+                  </p>
               </div>
           </div>
       )}
@@ -328,14 +338,18 @@ const PatientDetails: React.FC = () => {
                                 {toqueString}
                             </div>
                             <div className="mt-1 flex items-center gap-2">
-                                {obs.obstetric.station !== undefined && <span className="bg-white px-1.5 rounded border border-slate-200">De Lee: <b>{obs.obstetric.station > 0 ? '+' : ''}{obs.obstetric.station}</b></span>}
+                                {obs.obstetric.station !== undefined && (
+                                    <span className="bg-white px-1.5 rounded border border-slate-200">
+                                        {obs.obstetric.station === -4 ? <b>Alto e Móvel</b> : <>De Lee: <b>{obs.obstetric.station > 0 ? '+' : ''}{obs.obstetric.station}</b></>}
+                                    </span>
+                                )}
                                 {obs.obstetric.membranes && <span className="bg-white px-1.5 rounded border border-slate-200">Bolsa: <b>{obs.obstetric.membranes}</b></span>}
                             </div>
                         </div>
                     )}
 
-                     {/* Magnesium Protocol Data - ONLY SHOW IF PATIENT IS USING MAGNESIUM SULFATE */}
-                     {obs.magnesiumData && patient.useMagnesiumSulfate && (
+                     {/* Magnesium Protocol Data - Show if data exists, regardless of patient flag (History) */}
+                     {obs.magnesiumData && (
                        <div className="col-span-2 bg-purple-100/50 p-2 rounded-lg border border-purple-200 text-xs text-purple-900 mt-2 flex flex-col gap-1">
                           <div className="font-bold text-[10px] uppercase tracking-wide text-purple-700 flex items-center gap-1">
                               <Activity className="w-3 h-3" /> Protocolo Magnésio

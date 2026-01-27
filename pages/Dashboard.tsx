@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, ScheduledTask } from '../types';
 import { patientService } from '../services/supabaseService';
 import PatientCard from '../components/PatientCard';
-import { Search, Clock, CheckCircle2, BedDouble } from 'lucide-react';
+import { Search, Clock, CheckCircle2, BedDouble, Archive } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 // Flattened task for display
@@ -32,13 +32,20 @@ const Dashboard: React.FC = () => {
     setLoading(false);
   };
 
-  // Filter: Active patients are those NOT Discharged AND NOT Partogram Opened
+  // 1. Active Patients
   const activePatients = patients.filter(p => 
     p.status !== PatientStatus.DISCHARGED &&
     p.status !== PatientStatus.PARTOGRAM_OPENED &&
     (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
      p.bed.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  // 2. Resolved Patients (Last 24h or generic resolved for now)
+  const resolvedPatients = patients.filter(p => 
+    (p.status === PatientStatus.DISCHARGED || p.status === PatientStatus.PARTOGRAM_OPENED) &&
+    (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+     p.bed.toLowerCase().includes(searchTerm.toLowerCase()))
+  ).sort((a,b) => new Date(b.dischargeTime || 0).getTime() - new Date(a.dischargeTime || 0).getTime());
 
   // Flatten pending tasks from all active patients
   const tasks: DashboardTask[] = activePatients.flatMap(p => 
@@ -154,7 +161,7 @@ const Dashboard: React.FC = () => {
             )}
           </section>
 
-          {/* Patients Grid */}
+          {/* Active Patients Grid */}
           <section>
             <h3 className="text-lg font-bold text-slate-800 mb-3 flex items-center gap-2">
               <BedDouble className="w-5 h-5 text-slate-600" />
@@ -173,6 +180,20 @@ const Dashboard: React.FC = () => {
               )}
             </div>
           </section>
+
+          {/* Recently Resolved Section */}
+          {resolvedPatients.length > 0 && (
+             <section className="pt-4 border-t border-slate-200">
+                <h3 className="text-sm font-bold text-slate-500 mb-3 flex items-center gap-2 uppercase">
+                  <Archive className="w-4 h-4" /> Resolvidos Recentemente
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-80">
+                  {resolvedPatients.slice(0, 6).map(patient => (
+                    <PatientCard key={patient.id} patient={patient} />
+                  ))}
+                </div>
+             </section>
+          )}
         </>
       )}
     </div>

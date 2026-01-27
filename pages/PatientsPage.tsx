@@ -22,12 +22,25 @@ const PatientsPage: React.FC = () => {
     setLoading(false);
   };
 
-  const activePatients = patients.filter(p => 
-    p.status !== PatientStatus.DISCHARGED &&
-    p.status !== PatientStatus.PARTOGRAM_OPENED &&
+  // Allow resolved patients to appear, just sort them.
+  const filteredPatients = patients.filter(p => 
     (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
      p.bed.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  ).sort((a, b) => {
+      // Logic: Active first, then resolved by discharge date
+      const isResolvedA = a.status === PatientStatus.DISCHARGED || a.status === PatientStatus.PARTOGRAM_OPENED;
+      const isResolvedB = b.status === PatientStatus.DISCHARGED || b.status === PatientStatus.PARTOGRAM_OPENED;
+      
+      if (isResolvedA && !isResolvedB) return 1;
+      if (!isResolvedA && isResolvedB) return -1;
+      
+      // If both active, sort by Bed
+      if (!isResolvedA) {
+          return a.bed.localeCompare(b.bed, undefined, { numeric: true });
+      }
+      // If both resolved, sort by discharge time (newest first)
+      return new Date(b.dischargeTime || 0).getTime() - new Date(a.dischargeTime || 0).getTime();
+  });
 
   return (
     <div className="space-y-6 pb-24">
@@ -36,7 +49,7 @@ const PatientsPage: React.FC = () => {
         <div className="flex items-center justify-between">
             <div>
                 <h2 className="text-2xl font-bold text-slate-900">Pacientes</h2>
-                <p className="text-slate-500 text-sm">Gerenciamento de leitos</p>
+                <p className="text-slate-500 text-sm">Gerenciamento de leitos e histórico</p>
             </div>
             <Link to="/admission" className="bg-medical-600 text-white p-2 rounded-lg shadow-sm hover:bg-medical-700 transition-colors">
                 <UserPlus className="w-6 h-6" />
@@ -62,8 +75,8 @@ const PatientsPage: React.FC = () => {
       ) : (
         <section>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {activePatients.length > 0 ? (
-                activePatients.map(patient => (
+              {filteredPatients.length > 0 ? (
+                filteredPatients.map(patient => (
                   <PatientCard key={patient.id} patient={patient} />
                 ))
               ) : (

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
@@ -40,7 +39,6 @@ const ObservationForm: React.FC = () => {
     station: '',
     cervixPosition: '',
     cervixConsistency: '',
-    presentationHeight: '', // NEW: AM | INS
     membranes: '' as MembraneStatus | '', // CHANGED: Default is empty, not INTACT
     bloodOnGlove: false, // NEW: SDL (true) / SSDL (false)
     paSys: '',
@@ -61,25 +59,42 @@ const ObservationForm: React.FC = () => {
   const calculateBishopScore = () => {
     let score = 0;
     let filledFields = 0;
+    
+    // 1. Dilatação
     if (formData.dilation !== '') {
         const d = Number(formData.dilation);
         if (d >= 5) score += 3; else if (d >= 3) score += 2; else if (d >= 1) score += 1;
         filledFields++;
     }
+    
+    // 2. Apagamento
     if (formData.effacement !== '') {
         const e = Number(formData.effacement);
         if (e >= 80) score += 3; else if (e >= 60) score += 2; else if (e >= 40) score += 1;
         filledFields++;
     }
+    
+    // 3. Altura (De Lee)
     if (formData.station !== '') {
         const s = Number(formData.station);
-        if (s >= 0) score += 3; else if (s === -1) score += 2; else if (s === -2) score += 1;
+        // Bishop Modificado:
+        // +1, +2 : 3 pts
+        // -1, 0  : 2 pts
+        // -2     : 1 pt
+        // -3     : 0 pts
+        if (s >= 1) score += 3; 
+        else if (s === 0 || s === -1) score += 2; 
+        else if (s === -2) score += 1;
         filledFields++;
     }
+    
+    // 4. Consistência
     if (formData.cervixConsistency) {
         if (formData.cervixConsistency === 'Labial') score += 2; else if (formData.cervixConsistency === 'Nasolabial') score += 1;
         filledFields++;
     }
+    
+    // 5. Posição
     if (formData.cervixPosition) {
         if (formData.cervixPosition === 'Central') score += 2; else if (formData.cervixPosition === 'Intermediário') score += 1;
         filledFields++;
@@ -203,7 +218,6 @@ const ObservationForm: React.FC = () => {
                        station: obs.obstetric.station !== undefined ? String(obs.obstetric.station) : '',
                        cervixPosition: obs.obstetric.cervixPosition || '',
                        cervixConsistency: obs.obstetric.cervixConsistency || '',
-                       presentationHeight: obs.obstetric.presentationHeight || '',
                        membranes: obs.obstetric.membranes || '' as MembraneStatus,
                        bloodOnGlove: obs.obstetric.bloodOnGlove || false,
                        paSys: obs.vitals.paSystolic !== undefined ? String(obs.vitals.paSystolic) : '',
@@ -236,6 +250,11 @@ const ObservationForm: React.FC = () => {
                 targetDate = new Date(Math.round(targetDate.getTime() / coeff) * coeff);
                 let initialParams = ['BCF', 'Dinâmica', 'PA'];
 
+                // Auto-activate Mg params if patient is using protocol (Convenience)
+                if (p.useMagnesiumSulfate) {
+                    initialParams.push('Reflexo', 'Diurese', 'FR');
+                }
+
                 if (taskId) {
                     const task = p.schedule.find(t => t.id === taskId);
                     if (task) {
@@ -266,6 +285,10 @@ const ObservationForm: React.FC = () => {
     // Logic: If dynamics is empty, do not send 'Ausente', send undefined. Only send if user typed something.
     const dynamicsVal = activeParams.includes('Dinâmica') && formData.dinamicaSummary.trim() !== '' ? formData.dinamicaSummary : undefined;
 
+    // Determine if Mg Data should be sent. 
+    // CRITICAL FIX: Only send if the parameters are ACTIVE in the form.
+    const isMgActive = activeParams.includes('Reflexo') || activeParams.includes('Diurese') || activeParams.includes('FR');
+
     const payload = {
         patientId: id,
         timestamp: finalDateObj.toISOString(),
@@ -290,7 +313,6 @@ const ObservationForm: React.FC = () => {
           station: activeParams.includes('Toque') ? numOrUndef(formData.station) : undefined,
           cervixPosition: activeParams.includes('Toque') ? (formData.cervixPosition as any) : undefined,
           cervixConsistency: activeParams.includes('Toque') ? (formData.cervixConsistency as any) : undefined,
-          presentationHeight: activeParams.includes('Toque') ? (formData.presentationHeight as any) : undefined,
           // Only send membranes if Toque is active AND user selected a value (not empty string)
           membranes: activeParams.includes('Toque') && formData.membranes !== '' ? (formData.membranes as MembraneStatus) : undefined,
           bloodOnGlove: activeParams.includes('Toque') ? formData.bloodOnGlove : undefined
@@ -299,7 +321,7 @@ const ObservationForm: React.FC = () => {
           misoprostolDose: activeParams.includes('Meds') ? numOrUndef(formData.miso) : undefined,
           oxytocinDose: activeParams.includes('Meds') ? numOrUndef(formData.oxy) : undefined,
         },
-        magnesiumData: (patient.useMagnesiumSulfate || activeParams.includes('Reflexo')) ? {
+        magnesiumData: isMgActive ? {
             reflex: formData.magReflex as any,
             diuresis: formData.magDiuresis,
             respiratoryRate: numOrUndef(formData.magRespiratoryRate)
@@ -617,22 +639,6 @@ const ObservationForm: React.FC = () => {
                                 </label>
                             ))}
                         </div>
-                    </div>
-
-                    <div>
-                         <label className="block text-xs font-medium text-slate-500 mb-1">Altura da Apresentação</label>
-                         <div className="flex gap-2">
-                             {['AM', 'INS'].map(val => (
-                                <button
-                                    key={val}
-                                    type="button"
-                                    onClick={() => handleSelection('presentationHeight', val)}
-                                    className={`flex-1 py-2 px-3 rounded text-xs font-bold border transition-all ${formData.presentationHeight === val ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}
-                                >
-                                    {val === 'AM' ? 'Alto e Móvel (AM)' : 'Insinuado (INS)'}
-                                </button>
-                             ))}
-                         </div>
                     </div>
 
                     <div className="col-span-2">

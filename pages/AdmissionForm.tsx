@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { PatientStatus, ScheduledTask } from '../types';
-import { ArrowLeft, CalendarClock, Zap, Plus, Pill, Beaker, Check, Settings2, Trash2 } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Zap, Plus, Pill, Beaker, Check, Settings2, Trash2, Power, StopCircle } from 'lucide-react';
 
 // Added 'Sat' and 'TAX' to bring total to 10 items
 const PARAM_OPTIONS = ['BCF', 'PA', 'FC', 'Miso', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX'];
@@ -109,9 +110,19 @@ const AdmissionForm: React.FC = () => {
       applyPreset(Number(presetInterval), [presetParam]);
   };
 
-  const handleApplyMgProtocol = () => {
-    setFormData(prev => ({...prev, useMagnesiumSulfate: true}));
-    applyPreset(60, ['PA', 'Reflexo', 'Diurese', 'FR']);
+  const handleToggleProtocol = (type: 'methyldopa' | 'magnesium') => {
+      if (type === 'methyldopa') {
+          setFormData(prev => ({ ...prev, useMethyldopa: !prev.useMethyldopa }));
+      } else {
+          setFormData(prev => {
+              const newState = !prev.useMagnesiumSulfate;
+              // If turning ON Magnesium, auto-apply the schedule preset for convenience
+              if (newState) {
+                  applyPreset(60, ['PA', 'Reflexo', 'Diurese', 'FR']);
+              }
+              return { ...prev, useMagnesiumSulfate: newState };
+          });
+      }
   };
 
   const handleClearSchedule = () => {
@@ -137,6 +148,8 @@ const AdmissionForm: React.FC = () => {
         status: 'pending'
       }));
 
+    const nowIso = new Date().toISOString();
+
     try {
       await patientService.createPatient({
         name: formData.name,
@@ -146,11 +159,17 @@ const AdmissionForm: React.FC = () => {
         gestationalAgeDays: Number(formData.days),
         parity: formData.parity,
         status: PatientStatus.ACTIVE_LABOR,
-        admissionDate: new Date().toISOString(),
+        admissionDate: nowIso,
         bloodType: formData.bloodType,
         riskFactors: formData.riskFactors ? formData.riskFactors.split(',').map(s => s.trim()) : [],
+        
+        // Protocol Logic
         useMethyldopa: formData.useMethyldopa,
+        methyldopaStartTime: formData.useMethyldopa ? nowIso : undefined,
+        
         useMagnesiumSulfate: formData.useMagnesiumSulfate,
+        magnesiumSulfateStartTime: formData.useMagnesiumSulfate ? nowIso : undefined,
+
         schedule: schedule
       });
       navigate('/');
@@ -251,41 +270,57 @@ const AdmissionForm: React.FC = () => {
             />
           </div>
           
-          {/* Protocols */}
-          <div className="col-span-2 pt-2 border-t border-slate-200 space-y-2">
-             <label className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
-                <input 
-                  type="checkbox" 
-                  name="useMethyldopa" 
-                  checked={formData.useMethyldopa} 
-                  onChange={handleChange}
-                  className="w-5 h-5 text-medical-600 rounded focus:ring-medical-500" 
-                />
-                <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                        <Pill className="w-4 h-4 text-medical-500" />
-                        Uso de Metildopa
-                    </span>
-                    <span className="text-[10px] text-slate-400">Habilita coleta de PA sentada e em pé</span>
-                </div>
-             </label>
+          {/* PROTOCOLS CARDS */}
+          <div className="col-span-2 pt-2 border-t border-slate-200 space-y-3">
+             <label className="block text-xs font-bold text-slate-500 uppercase">Protocolos Iniciais</label>
+             
+             {/* Methyldopa Card */}
+             <div className={`p-4 rounded-xl border transition-all ${formData.useMethyldopa ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
+                   <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-center gap-2">
+                           <Pill className={`w-5 h-5 ${formData.useMethyldopa ? 'text-blue-600' : 'text-slate-400'}`} />
+                           <span className={`font-bold text-sm ${formData.useMethyldopa ? 'text-blue-900' : 'text-slate-600'}`}>Metildopa</span>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => handleToggleProtocol('methyldopa')}
+                         className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 transition-colors ${
+                             formData.useMethyldopa 
+                             ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                             : 'bg-blue-600 text-white hover:bg-blue-700'
+                         }`}
+                       >
+                           {formData.useMethyldopa ? <><StopCircle className="w-3 h-3" /> Remover</> : <><Power className="w-3 h-3" /> Iniciar</>}
+                       </button>
+                   </div>
+                   <p className="text-[10px] text-slate-500 leading-tight">
+                       Habilita campos para coleta de PA sentada e em pé nas evoluções.
+                   </p>
+            </div>
 
-             <label className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors">
-                <input 
-                  type="checkbox" 
-                  name="useMagnesiumSulfate" 
-                  checked={formData.useMagnesiumSulfate} 
-                  onChange={handleChange}
-                  className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500" 
-                />
-                <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                        <Beaker className="w-4 h-4 text-purple-500" />
-                        Sulfato de Magnésio
-                    </span>
-                    <span className="text-[10px] text-slate-400">Indica protocolo de neuroproteção/eclâmpsia</span>
-                </div>
-             </label>
+            {/* Magnesium Card */}
+            <div className={`p-4 rounded-xl border transition-all ${formData.useMagnesiumSulfate ? 'bg-purple-50 border-purple-200' : 'bg-white border-slate-200'}`}>
+                   <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-center gap-2">
+                           <Beaker className={`w-5 h-5 ${formData.useMagnesiumSulfate ? 'text-purple-600' : 'text-slate-400'}`} />
+                           <span className={`font-bold text-sm ${formData.useMagnesiumSulfate ? 'text-purple-900' : 'text-slate-600'}`}>Sulfato de Magnésio</span>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => handleToggleProtocol('magnesium')}
+                         className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 transition-colors ${
+                             formData.useMagnesiumSulfate 
+                             ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                             : 'bg-purple-600 text-white hover:bg-purple-700'
+                         }`}
+                       >
+                           {formData.useMagnesiumSulfate ? <><StopCircle className="w-3 h-3" /> Remover</> : <><Power className="w-3 h-3" /> Iniciar</>}
+                       </button>
+                   </div>
+                   <p className="text-[10px] text-slate-500 leading-tight">
+                       Habilita campos de neuroproteção. <span className="text-purple-600 font-bold">*Ao iniciar, a rotina de 1h em 1h será aplicada automaticamente abaixo.</span>
+                   </p>
+            </div>
           </div>
         </div>
 
@@ -369,21 +404,6 @@ const AdmissionForm: React.FC = () => {
                           <Check className="w-4 h-4" /> Aplicar
                       </button>
                   </div>
-               </div>
-
-               {/* Separator */}
-               <div className="my-4 border-t border-slate-200/60"></div>
-
-               {/* Combo Especial */}
-               <div>
-                  <span className="text-[10px] font-bold text-slate-400 mb-2 block">COMBOS ESPECIAIS:</span>
-                   <button 
-                    type="button" 
-                    onClick={handleApplyMgProtocol}
-                    className="w-full px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg text-xs font-bold text-purple-700 hover:bg-purple-100 flex items-center justify-center gap-2 transition-colors focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                   >
-                     <Beaker className="w-4 h-4" /> Protocolo Sulfato Mg (1h/1h)
-                   </button>
                </div>
             </div>
 

@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, Observation } from '../types';
 import { patientService } from '../services/supabaseService';
@@ -22,7 +21,13 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
         if (o.dilation !== undefined && o.dilation > 0) parts.push(`${o.dilation}CM`);
         else if (o.cervixStatus && o.cervixStatus.length > 0) parts.push(o.cervixStatus.join(', '));
         else if (o.dilation === 0) parts.push('0CM');
-        if (o.presentationHeight) parts.push(o.presentationHeight);
+        
+        // Station Logic Updated
+        if (o.station !== undefined) {
+             if (o.station === -4) parts.push('AM');
+             else parts.push(`DE LEE ${o.station > 0 ? '+' : ''}${o.station}`);
+        }
+
         if (o.bloodOnGlove !== undefined) parts.push(o.bloodOnGlove ? 'SDL' : 'SSDL');
         return parts.length > 0 ? `TOQUE: ${parts.join(', ')}` : '';
     };
@@ -166,7 +171,11 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                                                     </span>
                                                     <div className="text-[10px] text-slate-500 flex flex-wrap gap-1">
                                                         {obs.obstetric.effacement !== undefined && <span>Apag: {obs.obstetric.effacement}%</span>}
-                                                        {obs.obstetric.station !== undefined && <span>De Lee: {obs.obstetric.station > 0 ? '+' : ''}{obs.obstetric.station}</span>}
+                                                        {obs.obstetric.station !== undefined && (
+                                                            <span>
+                                                                {obs.obstetric.station === -4 ? 'AM' : `De Lee: ${obs.obstetric.station > 0 ? '+' : ''}${obs.obstetric.station}`}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {obs.obstetric.membranes && (
                                                         <span className="text-[10px] bg-slate-100 px-1 rounded w-fit mt-0.5 border border-slate-200">

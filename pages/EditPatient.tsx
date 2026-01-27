@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
-import { Patient, PatientStatus } from '../types';
-import { ArrowLeft, Pill, Beaker, Save, Trash2, AlertTriangle, Lock } from 'lucide-react';
+import { Patient, PatientStatus, ScheduledTask } from '../types';
+import { ArrowLeft, Pill, Beaker, Save, Trash2, AlertTriangle, Lock, CalendarClock, Plus, X, Power, Check, StopCircle } from 'lucide-react';
+
+const PARAM_OPTIONS = ['BCF', 'PA', 'FC', 'Miso', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX'];
 
 const EditPatient: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,9 +18,18 @@ const EditPatient: React.FC = () => {
     name: '',
     bed: '',
     riskFactors: '',
+    
+    // Protocols
     useMethyldopa: false,
-    useMagnesiumSulfate: false
+    methyldopaStartTime: '' as string | undefined,
+    methyldopaEndTime: '' as string | undefined,
+    
+    useMagnesiumSulfate: false,
+    magnesiumSulfateStartTime: '' as string | undefined,
+    magnesiumSulfateEndTime: '' as string | undefined,
   });
+
+  const [schedule, setSchedule] = useState<ScheduledTask[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -29,9 +40,17 @@ const EditPatient: React.FC = () => {
                     name: p.name,
                     bed: p.bed,
                     riskFactors: p.riskFactors ? p.riskFactors.join(', ') : '',
+                    
                     useMethyldopa: p.useMethyldopa || false,
-                    useMagnesiumSulfate: p.useMagnesiumSulfate || false
+                    methyldopaStartTime: p.methyldopaStartTime,
+                    methyldopaEndTime: p.methyldopaEndTime,
+
+                    useMagnesiumSulfate: p.useMagnesiumSulfate || false,
+                    magnesiumSulfateStartTime: p.magnesiumSulfateStartTime,
+                    magnesiumSulfateEndTime: p.magnesiumSulfateEndTime
                 });
+                // Load schedule, ensure dates are valid
+                setSchedule(p.schedule || []);
             }
             setLoading(false);
         });
@@ -48,8 +67,16 @@ const EditPatient: React.FC = () => {
         name: formData.name,
         bed: formData.bed,
         riskFactors: formData.riskFactors ? formData.riskFactors.split(',').map(s => s.trim()) : [],
+        
         useMethyldopa: formData.useMethyldopa,
-        useMagnesiumSulfate: formData.useMagnesiumSulfate
+        methyldopaStartTime: formData.methyldopaStartTime,
+        methyldopaEndTime: formData.methyldopaEndTime,
+
+        useMagnesiumSulfate: formData.useMagnesiumSulfate,
+        magnesiumSulfateStartTime: formData.magnesiumSulfateStartTime,
+        magnesiumSulfateEndTime: formData.magnesiumSulfateEndTime,
+
+        schedule: schedule // Save the updated schedule
       });
       navigate(`/patient/${id}`);
     } catch (error) {
@@ -80,9 +107,128 @@ const EditPatient: React.FC = () => {
     setFormData(prev => ({ ...prev, [e.target.name]: value }));
   };
 
+  // --- PROTOCOL MANAGEMENT LOGIC ---
+  const handleToggleProtocol = (type: 'methyldopa' | 'magnesium') => {
+      const now = new Date().toISOString();
+      const isMg = type === 'magnesium';
+      
+      setFormData(prev => {
+          const isActive = isMg ? prev.useMagnesiumSulfate : prev.useMethyldopa;
+          
+          if (isActive) {
+              // STOP PROTOCOL
+              if (confirm(`Deseja realmente ENCERRAR o protocolo de ${isMg ? 'Sulfato' : 'Metildopa'}? Os parâmetros específicos serão removidos dos agendamentos futuros.`)) {
+                  // Clean up schedule
+                  if (isMg) {
+                      setSchedule(currentSchedule => currentSchedule.map(task => {
+                          if (task.status === 'pending') {
+                              // Remove Mg specific params from future tasks
+                              return {
+                                  ...task,
+                                  focus: task.focus.filter(f => !['Reflexo', 'Diurese', 'FR'].includes(f))
+                              };
+                          }
+                          return task;
+                      }));
+                  }
+                  
+                  return {
+                      ...prev,
+                      [isMg ? 'useMagnesiumSulfate' : 'useMethyldopa']: false,
+                      [isMg ? 'magnesiumSulfateEndTime' : 'methyldopaEndTime']: now
+                  };
+              }
+              return prev;
+          } else {
+              // START PROTOCOL
+              // For Mg, helpful to auto-add params to next 24h of pending tasks
+              if (isMg) {
+                 setSchedule(currentSchedule => {
+                     const cutoff = new Date(Date.now() + 24 * 60 * 60 * 1000).getTime();
+                     return currentSchedule.map(task => {
+                         const taskTime = new Date(task.timestamp).getTime();
+                         if (task.status === 'pending' && taskTime <= cutoff) {
+                             const newFocus = Array.from(new Set([...task.focus, 'Reflexo', 'Diurese', 'FR']));
+                             return { ...task, focus: newFocus };
+                         }
+                         return task;
+                     });
+                 });
+              }
+
+              return {
+                  ...prev,
+                  [isMg ? 'useMagnesiumSulfate' : 'useMethyldopa']: true,
+                  [isMg ? 'magnesiumSulfateStartTime' : 'methyldopaStartTime']: now,
+                  [isMg ? 'magnesiumSulfateEndTime' : 'methyldopaEndTime']: undefined // Reset end time
+              };
+          }
+      });
+  };
+
+
+  // --- SCHEDULE LOGIC ---
+
+  const handleToggleTaskParam = (taskId: string, param: string) => {
+      setSchedule(prev => prev.map(task => {
+          if (task.id !== taskId) return task;
+          
+          const hasParam = task.focus.includes(param);
+          const newFocus = hasParam 
+            ? task.focus.filter(p => p !== param) 
+            : [...task.focus, param];
+          
+          return { ...task, focus: newFocus };
+      }));
+  };
+
+  const handleRemoveTask = (taskId: string) => {
+      if (confirm('Remover este horário do cronograma?')) {
+          setSchedule(prev => prev.filter(t => t.id !== taskId));
+      }
+  };
+
+  const handleAddMoreTime = () => {
+      setSchedule(prev => {
+          // Find last task time or use now
+          let startTime = new Date();
+          if (prev.length > 0) {
+              // Get the very last task regardless of status
+              const sorted = [...prev].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              startTime = new Date(sorted[sorted.length - 1].timestamp);
+              // Add 15 mins to start
+              startTime = new Date(startTime.getTime() + 15 * 60000);
+          } else {
+              // Round up to next 15 min
+              const coeff = 1000 * 60 * 15;
+              startTime = new Date(Math.ceil(startTime.getTime() / coeff) * coeff);
+          }
+
+          const newTasks: ScheduledTask[] = [];
+          // Add 48 slots (12 hours * 4 slots/hour)
+          for (let i = 0; i < 48; i++) {
+              const time = new Date(startTime.getTime() + i * 15 * 60000);
+              newTasks.push({
+                  id: crypto.randomUUID(),
+                  timestamp: time.toISOString(),
+                  focus: [], // Empty by default
+                  status: 'pending'
+              });
+          }
+          
+          return [...prev, ...newTasks];
+      });
+  };
+
   if (loading) return <div className="p-8 text-center">Carregando...</div>;
 
   const isResolved = patientStatus === PatientStatus.DISCHARGED || patientStatus === PatientStatus.PARTOGRAM_OPENED;
+
+  // Filter tasks for display (sort by time)
+  // We generally only want to edit PENDING tasks
+  const pendingTasks = schedule
+    .filter(t => t.status === 'pending')
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   return (
     <div className="max-w-lg mx-auto pb-20">
@@ -144,43 +290,145 @@ const EditPatient: React.FC = () => {
                 />
             </div>
 
-            {/* Protocols */}
+            {/* Protocols Management */}
             <div className="pt-2 border-t border-slate-200 space-y-3">
-                <h3 className="text-sm font-bold text-slate-800">Protocolos Especiais</h3>
+                <h3 className="text-sm font-bold text-slate-800">Gerenciar Protocolos</h3>
                 
-                <label className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
-                    <input 
-                      type="checkbox" 
-                      name="useMethyldopa" 
-                      checked={formData.useMethyldopa} 
-                      onChange={handleChange}
-                      className="w-5 h-5 text-medical-600 rounded focus:ring-medical-500" 
-                    />
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                            <Pill className="w-4 h-4 text-medical-500" />
-                            Uso de Metildopa
-                        </span>
-                        <span className="text-[10px] text-slate-400">Habilita coleta de PA sentada e em pé</span>
-                    </div>
-                </label>
+                {/* Methyldopa Card */}
+                <div className={`p-4 rounded-xl border transition-all ${formData.useMethyldopa ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                   <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-center gap-2">
+                           <Pill className={`w-5 h-5 ${formData.useMethyldopa ? 'text-blue-600' : 'text-slate-400'}`} />
+                           <span className={`font-bold text-sm ${formData.useMethyldopa ? 'text-blue-900' : 'text-slate-600'}`}>Metildopa</span>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => handleToggleProtocol('methyldopa')}
+                         className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 transition-colors ${
+                             formData.useMethyldopa 
+                             ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                             : 'bg-blue-600 text-white hover:bg-blue-700'
+                         }`}
+                       >
+                           {formData.useMethyldopa ? <><StopCircle className="w-3 h-3" /> Encerrar</> : <><Power className="w-3 h-3" /> Iniciar</>}
+                       </button>
+                   </div>
+                   <div className="text-[10px] text-slate-500">
+                       {formData.useMethyldopa ? (
+                           <span>Iniciado em: {new Date(formData.methyldopaStartTime!).toLocaleString()}</span>
+                       ) : formData.methyldopaEndTime ? (
+                           <span>Encerrado em: {new Date(formData.methyldopaEndTime).toLocaleString()}</span>
+                       ) : (
+                           <span>Protocolo inativo.</span>
+                       )}
+                   </div>
+                </div>
 
-                <label className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors">
-                    <input 
-                      type="checkbox" 
-                      name="useMagnesiumSulfate" 
-                      checked={formData.useMagnesiumSulfate} 
-                      onChange={handleChange}
-                      className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500" 
-                    />
-                    <div className="flex flex-col">
-                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                            <Beaker className="w-4 h-4 text-purple-500" />
-                            Sulfato de Magnésio
-                        </span>
-                        <span className="text-[10px] text-slate-400">Protocolo de neuroproteção</span>
+                {/* Magnesium Card */}
+                <div className={`p-4 rounded-xl border transition-all ${formData.useMagnesiumSulfate ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-slate-200'}`}>
+                   <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-center gap-2">
+                           <Beaker className={`w-5 h-5 ${formData.useMagnesiumSulfate ? 'text-purple-600' : 'text-slate-400'}`} />
+                           <span className={`font-bold text-sm ${formData.useMagnesiumSulfate ? 'text-purple-900' : 'text-slate-600'}`}>Sulfato de Magnésio</span>
+                       </div>
+                       <button
+                         type="button"
+                         onClick={() => handleToggleProtocol('magnesium')}
+                         className={`text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-1 transition-colors ${
+                             formData.useMagnesiumSulfate 
+                             ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                             : 'bg-purple-600 text-white hover:bg-purple-700'
+                         }`}
+                       >
+                           {formData.useMagnesiumSulfate ? <><StopCircle className="w-3 h-3" /> Encerrar</> : <><Power className="w-3 h-3" /> Iniciar</>}
+                       </button>
+                   </div>
+                   <div className="text-[10px] text-slate-500">
+                       {formData.useMagnesiumSulfate ? (
+                           <p>Iniciado em: {new Date(formData.magnesiumSulfateStartTime!).toLocaleString()}</p>
+                       ) : formData.magnesiumSulfateEndTime ? (
+                           <p>Encerrado em: {new Date(formData.magnesiumSulfateEndTime).toLocaleString()}</p>
+                       ) : (
+                           <p>Protocolo inativo.</p>
+                       )}
+                   </div>
+                   {formData.useMagnesiumSulfate && (
+                       <p className="text-[10px] text-purple-600 mt-2 bg-white/50 p-1 rounded">
+                           *Encerrar o protocolo removerá automaticamente Reflexo, Diurese e FR dos agendamentos futuros.
+                       </p>
+                   )}
+                </div>
+            </div>
+
+            {/* SCHEDULE EDITOR */}
+            <div className="pt-4 border-t border-slate-200">
+               <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <CalendarClock className="w-4 h-4 text-medical-600" />
+                      Editar Cronograma Futuro
+                  </h3>
+               </div>
+
+               <div className="border border-slate-200 rounded-xl overflow-hidden bg-white max-h-96 overflow-y-auto custom-scrollbar">
+                   {pendingTasks.length === 0 ? (
+                       <div className="p-8 text-center text-slate-400 text-xs">
+                           Sem tarefas pendentes no futuro.
+                       </div>
+                   ) : (
+                       pendingTasks.map((task) => {
+                           const hasSelection = task.focus.length > 0;
+                           return (
+                               <div key={task.id} className={`grid grid-cols-[60px_1fr_30px] border-b border-slate-100 last:border-0 ${hasSelection ? 'bg-blue-50/20' : 'bg-white'}`}>
+                                   <div className={`p-3 flex items-center justify-center text-xs font-bold border-r border-slate-100 ${hasSelection ? 'text-blue-600' : 'text-slate-400'}`}>
+                                       {new Date(task.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                   </div>
+                                   <div className="p-2 flex flex-wrap gap-1 items-center">
+                                       {PARAM_OPTIONS.map(param => {
+                                           const isActive = task.focus.includes(param);
+                                           const isMgParam = ['Reflexo', 'Diurese', 'FR'].includes(param);
+                                           return (
+                                               <button
+                                                   key={param}
+                                                   type="button"
+                                                   onClick={() => handleToggleTaskParam(task.id, param)}
+                                                   className={`
+                                                     h-6 px-1.5 rounded text-[9px] font-bold border transition-all select-none
+                                                     ${isActive 
+                                                         ? (isMgParam ? 'bg-purple-500 text-white border-purple-600' : 'bg-medical-500 text-white border-medical-600')
+                                                         : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'}
+                                                   `}
+                                               >
+                                                   {param}
+                                               </button>
+                                           )
+                                       })}
+                                   </div>
+                                   <div className="flex items-center justify-center">
+                                       <button 
+                                          type="button"
+                                          onClick={() => handleRemoveTask(task.id)}
+                                          className="text-slate-300 hover:text-red-500 p-1"
+                                       >
+                                           <X className="w-4 h-4" />
+                                       </button>
+                                   </div>
+                               </div>
+                           );
+                       })
+                   )}
+                   
+                   {/* Add More Button */}
+                   <div className="p-3 bg-slate-50 flex justify-center border-t border-slate-200 sticky bottom-0">
+                        <button 
+                            type="button" 
+                            onClick={handleAddMoreTime}
+                            className="text-xs font-bold text-medical-600 flex items-center gap-1 hover:text-medical-700 bg-white px-4 py-2 rounded-full border border-medical-100 shadow-sm"
+                        >
+                            <Plus className="w-3 h-3" />
+                            Adicionar +12h ao final
+                        </button>
                     </div>
-                </label>
+               </div>
             </div>
 
             <button

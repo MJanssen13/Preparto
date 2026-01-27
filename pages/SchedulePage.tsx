@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, ScheduledTask } from '../types';
 import { patientService } from '../services/supabaseService';
-import { Clock, CheckCircle2, BedDouble, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2, BedDouble, AlertCircle, ArrowDownUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 // Flattened task for display
@@ -16,6 +16,7 @@ const SchedulePage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
+  const [sortBy, setSortBy] = useState<'time' | 'bed'>('time');
 
   useEffect(() => {
     loadPatients();
@@ -42,7 +43,18 @@ const SchedulePage: React.FC = () => {
           patientId: p.id,
           bed: p.bed
         }))
-    ).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    )
+    .sort((a, b) => {
+        if (sortBy === 'bed') {
+            // Numeric sort for beds (e.g. "2" comes before "10")
+            const bedDiff = a.bed.localeCompare(b.bed, undefined, { numeric: true });
+            if (bedDiff !== 0) return bedDiff;
+            // Secondary sort by time if beds are same
+            return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+        }
+        // Default sort by time
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+    });
 
   const getTaskStatusColor = (isoDate: string) => {
     const due = new Date(isoDate).getTime();
@@ -56,15 +68,41 @@ const SchedulePage: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-24">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-900">Cronograma</h2>
-          <p className="text-slate-500 text-sm">Próximas aferições do plantão</p>
-        </div>
-        <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-100 flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {tasks.length} pendentes
-        </div>
+      <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Cronograma</h2>
+              <p className="text-slate-500 text-sm">Próximas aferições do plantão</p>
+            </div>
+            <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-100 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {tasks.length} pendentes
+            </div>
+          </div>
+
+          {/* Sorting Controls */}
+          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg w-fit">
+              <button 
+                  onClick={() => setSortBy('time')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                      sortBy === 'time' 
+                      ? 'bg-white text-slate-800 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+              >
+                  <Clock className="w-3 h-3" /> Por Horário
+              </button>
+              <button 
+                  onClick={() => setSortBy('bed')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                      sortBy === 'bed' 
+                      ? 'bg-white text-slate-800 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+              >
+                  <BedDouble className="w-3 h-3" /> Por Leito
+              </button>
+          </div>
       </div>
 
       {loading ? (
@@ -113,7 +151,7 @@ const SchedulePage: React.FC = () => {
                     
                     {/* Visual indicator for late items */}
                     {new Date(task.timestamp).getTime() < now.getTime() && (
-                      <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-red-500 flex items-center justify-center">
+                      <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-red-50 flex items-center justify-center">
                           <span className="sr-only">Atrasado</span>
                       </div>
                     )}
