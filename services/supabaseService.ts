@@ -26,7 +26,9 @@ const isPatientExpired = (p: Patient): boolean => {
   // Check if patient is resolved (Discharged or Partogram Opened) and has a discharge time
   const isResolved = p.status === PatientStatus.DISCHARGED || p.status === PatientStatus.PARTOGRAM_OPENED;
   
-  if (!isResolved || !p.dischargeTime) return false;
+  // If we don't have dischargeTime (because DB column is missing), we keep patient visible but resolved.
+  if (!isResolved) return false;
+  if (!p.dischargeTime) return false; 
   
   const dischargeDate = new Date(p.dischargeTime).getTime();
   const now = new Date().getTime();
@@ -263,14 +265,13 @@ export const patientService = {
     const { data, error } = await supabase.from('patients').update(dbPayload).eq('id', id).select().single();
     if (error) {
         // --- LOGGING THE SUPABASE ERROR FOR DEBUGGING ---
-        // Use JSON.stringify to see the full error object structure in console
         console.error("Supabase update error:", JSON.stringify(error, null, 2));
         throw error; // Throw so we can catch it in the component
     }
     return mapPatientFromDB(data);
   },
 
-  // Dedicated method to handle resolution logic atomically
+  // Dedicated method to handle resolution logic atomically with FALLBACK
   async resolvePatient(id: string, newStatus: PatientStatus): Promise<void> {
       // 1. Fetch current patient to get the latest schedule
       const currentPatient = await this.getPatientById(id);
@@ -283,14 +284,31 @@ export const patientService = {
 
       console.log('Resolving patient:', id, 'New Schedule:', updatedSchedule);
 
-      // 3. Update DB
-      const result = await this.updatePatient(id, {
+      const updates: Partial<Patient> = {
           status: newStatus,
           dischargeTime: new Date().toISOString(),
           schedule: updatedSchedule
-      });
+      };
 
-      if (!result) throw new Error('Failed to resolve patient (Database update failed)');
+      // 3. Update DB with Error Handling
+      try {
+          const result = await this.updatePatient(id, updates);
+          if (!result) throw new Error('Failed to resolve patient (Database update returned null)');
+      } catch (error: any) {
+          // CHECK FOR MISSING COLUMN ERROR (PGRST204 means column missing in schema)
+          // Specifically if 'discharge_time' is missing
+          if (error?.code === 'PGRST204' && (error?.message?.includes('discharge_time') || error?.details?.includes('discharge_time'))) {
+              console.warn("⚠️ COLUNA 'discharge_time' AUSENTE. Tentando resolver sem salvar data de alta.");
+              
+              // Fallback: Try again WITHOUT dischargeTime
+              // This ensures the status changes and schedule is cleared, even if expiration logic won't work perfectly.
+              const { dischargeTime, ...fallbackUpdates } = updates;
+              await this.updatePatient(id, fallbackUpdates);
+              return; 
+          }
+          // If it's another error, rethrow it
+          throw error;
+      }
   },
 
   async deletePatient(id: string): Promise<void> {
@@ -389,23 +407,30 @@ export const patientService = {
     }
     const timestamp = obsData.timestamp || new Date().toISOString();
     const dbPayload = mapObservationToDB({ ...obsData, timestamp });
+    
+    // Save Observation first
     const { data, error } = await supabase.from('observations').insert(dbPayload).select().single();
     if (error) throw error;
     const newObs = mapObservationFromDB(data);
     
-    // ALWAYS update the patient's lastObservation field to ensure freshness
-    // This allows the cards to show the latest check immediately
-    await this.updatePatient(newObs.patientId, { lastObservation: newObs });
+    // Update Patient (Secondary) - Safe update
+    // If this fails (e.g. missing column in patient table), we catch it so we don't think observation failed
+    try {
+        await this.updatePatient(newObs.patientId, { lastObservation: newObs });
 
-    if (scheduledTaskId) {
-        const patient = await this.getPatientById(newObs.patientId);
-        if (patient) {
-            const updatedSchedule = patient.schedule.map(task => 
-                task.id === scheduledTaskId ? { ...task, status: 'completed' as const } : task
-            );
-            await this.updatePatient(patient.id, { schedule: updatedSchedule });
+        if (scheduledTaskId) {
+            const patient = await this.getPatientById(newObs.patientId);
+            if (patient) {
+                const updatedSchedule = patient.schedule.map(task => 
+                    task.id === scheduledTaskId ? { ...task, status: 'completed' as const } : task
+                );
+                await this.updatePatient(patient.id, { schedule: updatedSchedule });
+            }
         }
+    } catch (err) {
+        console.warn("Observation saved, but patient update failed (likely schedule/lastObservation sync)", err);
     }
+
     return newObs;
   }
 };

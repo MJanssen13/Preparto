@@ -38,14 +38,23 @@ const PatientDetails: React.FC = () => {
       try {
           // This service call automatically removes pending scheduled tasks and sets discharge time
           await patientService.resolvePatient(id, PatientStatus.DISCHARGED);
-          // Reload local data to reflect changes immediately
-          loadData(id);
+          
+          // Verify if it actually worked fully (if dischargeTime is missing in local update, it means fallback occurred)
+          // But we just reload data.
+          await loadData(id);
+          
+          // Check if patient object has dischargeTime now
+          const updatedP = await patientService.getPatientById(id);
+          if (updatedP && !updatedP.dischargeTime) {
+              alert("Aviso: O paciente foi marcado como resolvido, mas a DATA da alta não pôde ser salva.\n\nMotivo: Coluna 'discharge_time' não existe no Supabase.\nSolução: Rode o SQL 'alter table patients add column discharge_time timestamptz;' no seu banco.");
+          }
+
       } catch (error: any) {
           console.error("Erro ao resolver paciente:", error);
           // Show detailed Supabase error if available
           const errorMessage = error.message || 'Erro desconhecido';
           const details = error.details || error.hint || '';
-          alert(`ERRO DE BANCO DE DADOS:\n${errorMessage}\n${details}\n\nVerifique o console (F12) para o JSON completo do erro.`);
+          alert(`ERRO CRÍTICO DE BANCO DE DADOS:\n${errorMessage}\n${details}\n\nVerifique o console (F12) para o JSON completo do erro.`);
       }
   };
 
@@ -150,7 +159,9 @@ const PatientDetails: React.FC = () => {
         ) : (
              <div className="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-bold uppercase flex flex-col items-end">
                 <span>{patient.status === PatientStatus.PARTOGRAM_OPENED ? 'Partograma' : 'Resolvido'}</span>
-                <span className="text-[9px] font-normal">{new Date(patient.dischargeTime || '').toLocaleDateString()}</span>
+                {patient.dischargeTime && (
+                    <span className="text-[9px] font-normal">{new Date(patient.dischargeTime).toLocaleDateString()}</span>
+                )}
             </div>
         )}
       </div>
@@ -162,7 +173,7 @@ const PatientDetails: React.FC = () => {
               <div className="text-sm">
                   <p className="font-bold">Caso Resolvido</p>
                   <p className="text-xs opacity-80">
-                      Data: {new Date(patient.dischargeTime || '').toLocaleString()}
+                      {patient.dischargeTime ? `Data: ${new Date(patient.dischargeTime).toLocaleString()}` : 'Data não registrada (verifique BD).'}
                       <br/>
                       Cronograma futuro cancelado automaticamente.
                   </p>
