@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { PatientStatus, ScheduledTask } from '../types';
-import { ArrowLeft, CalendarClock, Zap, Plus, Pill, Beaker, Check, Settings2, Trash2, Power, StopCircle } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Zap, Plus, Pill, Beaker, Check, Settings2, Trash2, Power, StopCircle, Baby } from 'lucide-react';
 
 // Added 'Dinâmica'
 const PARAM_OPTIONS = ['BCF', 'Dinâmica', 'PA', 'FC', 'Medicação', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX', 'DXT'];
@@ -17,6 +17,7 @@ const AdmissionForm: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
+    babyName: '',
     bed: '',
     age: '',
     weeks: '',
@@ -47,7 +48,6 @@ const AdmissionForm: React.FC = () => {
     start.setSeconds(0, 0);
 
     // 1. Snap to previous hour or half-hour
-    // Ex: 08:12 -> 08:00 | 08:43 -> 08:30
     const minutes = start.getMinutes();
     if (minutes < 30) {
       start.setMinutes(0);
@@ -66,11 +66,9 @@ const AdmissionForm: React.FC = () => {
     } else {
       // Night Shift -> End at 07:00
       if (currentHour >= 19) {
-         // It's late evening (e.g., 20:00), end is tomorrow 07:00
          endTime.setDate(endTime.getDate() + 1);
          endTime.setHours(7);
       } else {
-         // It's early morning (e.g., 02:00), end is today 07:00
          endTime.setHours(7);
       }
     }
@@ -79,7 +77,6 @@ const AdmissionForm: React.FC = () => {
     const slots: TimeSlot[] = [];
     let current = new Date(start);
 
-    // Safety loop to prevent infinite generation (limit to 24h just in case)
     const maxSafety = new Date(start.getTime() + 24 * 60 * 60000);
 
     while (current <= endTime && current < maxSafety) {
@@ -95,15 +92,13 @@ const AdmissionForm: React.FC = () => {
   };
 
   const loadMoreSlots = () => {
-    // Current max is 72 hours. 
-    // 72 hours * 60 mins / 15 mins = 288 slots.
     if (timeSlots.length >= 288) return;
 
     const lastSlot = timeSlots[timeSlots.length - 1];
     const startNext = new Date(lastSlot.time.getTime() + 15 * 60000);
     
     const newSlots: TimeSlot[] = [];
-    // Add 12 hours (48 slots) - Standard next shift block
+    // Add 12 hours (48 slots)
     for (let i = 0; i < 48; i++) {
         const slotTime = new Date(startNext.getTime() + i * 15 * 60000);
         newSlots.push({
@@ -128,12 +123,10 @@ const AdmissionForm: React.FC = () => {
     }));
   };
 
-  // Helper to bulk select
   const applyPreset = (intervalMin: number, paramsToSet: string[]) => {
     const steps = intervalMin / 15;
     setTimeSlots(prev => prev.map((slot, i) => {
       if (i % steps === 0) {
-        // Merge unique params
         const newParams = Array.from(new Set([...slot.selectedParams, ...paramsToSet]));
         return { ...slot, selectedParams: newParams };
       }
@@ -151,7 +144,6 @@ const AdmissionForm: React.FC = () => {
       } else {
           setFormData(prev => {
               const newState = !prev.useMagnesiumSulfate;
-              // If turning ON Magnesium, auto-apply the schedule preset for convenience
               if (newState) {
                   applyPreset(60, ['PA', 'Reflexo', 'Diurese', 'FR']);
               }
@@ -188,6 +180,7 @@ const AdmissionForm: React.FC = () => {
     try {
       await patientService.createPatient({
         name: formData.name,
+        babyName: formData.babyName,
         bed: formData.bed,
         age: Number(formData.age),
         gestationalAgeWeeks: Number(formData.weeks),
@@ -257,6 +250,20 @@ const AdmissionForm: React.FC = () => {
             value={formData.name}
             onChange={handleChange}
           />
+        </div>
+
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">
+                <Baby className="w-4 h-4" /> Nome do Bebê (Opcional)
+            </label>
+            <input
+                name="babyName"
+                type="text"
+                placeholder="Ex: Maria"
+                className="w-full p-3 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none"
+                value={formData.babyName}
+                onChange={handleChange}
+            />
         </div>
 
         <div className="grid grid-cols-2 gap-4">

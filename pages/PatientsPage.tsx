@@ -3,13 +3,20 @@ import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
 import PatientCard from '../components/PatientCard';
-import { Search, BedDouble, UserPlus } from 'lucide-react';
+import { Search, BedDouble, UserPlus, Filter, ArrowDownAZ, ArrowDown01 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+type FilterType = 'all' | 'active' | 'resolved';
+type SortType = 'name' | 'bed';
 
 const PatientsPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Controls
+  const [filterType, setFilterType] = useState<FilterType>('active');
+  const [sortType, setSortType] = useState<SortType>('bed');
 
   useEffect(() => {
     loadPatients();
@@ -22,25 +29,36 @@ const PatientsPage: React.FC = () => {
     setLoading(false);
   };
 
-  // Allow resolved patients to appear, just sort them.
-  const filteredPatients = patients.filter(p => 
-    (p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-     p.bed.toLowerCase().includes(searchTerm.toLowerCase()))
-  ).sort((a, b) => {
-      // Logic: Active first, then resolved by discharge date
-      const isResolvedA = a.status === PatientStatus.DISCHARGED || a.status === PatientStatus.PARTOGRAM_OPENED;
-      const isResolvedB = b.status === PatientStatus.DISCHARGED || b.status === PatientStatus.PARTOGRAM_OPENED;
-      
-      if (isResolvedA && !isResolvedB) return 1;
-      if (!isResolvedA && isResolvedB) return -1;
-      
-      // If both active, sort by Bed
-      if (!isResolvedA) {
-          return a.bed.localeCompare(b.bed, undefined, { numeric: true });
-      }
-      // If both resolved, sort by discharge time (newest first)
-      return new Date(b.dischargeTime || 0).getTime() - new Date(a.dischargeTime || 0).getTime();
-  });
+  const isResolved = (status: PatientStatus) => {
+      return [
+        PatientStatus.DISCHARGED, 
+        PatientStatus.PARTOGRAM_OPENED,
+        PatientStatus.DELIVERY,
+        PatientStatus.C_SECTION
+      ].includes(status);
+  };
+
+  const filteredPatients = patients
+    .filter(p => {
+        // Search Filter
+        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              p.bed.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // Status Filter
+        const resolved = isResolved(p.status);
+        if (filterType === 'active') return matchesSearch && !resolved;
+        if (filterType === 'resolved') return matchesSearch && resolved;
+        return matchesSearch; // 'all'
+    })
+    .sort((a, b) => {
+        // Sort Logic
+        if (sortType === 'name') {
+            return a.name.localeCompare(b.name);
+        } else {
+            // Bed sort (numeric aware)
+            return a.bed.localeCompare(b.bed, undefined, { numeric: true });
+        }
+    });
 
   return (
     <div className="space-y-6 pb-24">
@@ -56,6 +74,7 @@ const PatientsPage: React.FC = () => {
             </Link>
         </div>
         
+        {/* Search */}
         <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
@@ -65,6 +84,49 @@ const PatientsPage: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-medical-500 shadow-sm"
             />
+        </div>
+
+        {/* Toolbar: Filters & Sorting */}
+        <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1">
+            {/* Filter Group */}
+            <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
+                <button 
+                   onClick={() => setFilterType('active')}
+                   className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'active' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                   Ativos
+                </button>
+                <button 
+                   onClick={() => setFilterType('resolved')}
+                   className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'resolved' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                   Resolvidos
+                </button>
+                <button 
+                   onClick={() => setFilterType('all')}
+                   className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'all' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                >
+                   Todos
+                </button>
+            </div>
+
+            {/* Sort Group */}
+            <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm ml-auto">
+                <button 
+                   onClick={() => setSortType('bed')}
+                   className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'bed' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                   title="Ordenar por Leito"
+                >
+                   <ArrowDown01 className="w-3 h-3" /> Leito
+                </button>
+                <button 
+                   onClick={() => setSortType('name')}
+                   className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'name' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                   title="Ordenar por Nome"
+                >
+                   <ArrowDownAZ className="w-3 h-3" /> Nome
+                </button>
+            </div>
         </div>
       </div>
 

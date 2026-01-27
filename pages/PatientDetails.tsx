@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -12,6 +12,10 @@ const PatientDetails: React.FC = () => {
   const [patient, setPatient] = useState<Patient | undefined>(undefined);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Resolution Modal State
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (id) loadData(id);
@@ -28,33 +32,43 @@ const PatientDetails: React.FC = () => {
     setLoading(false);
   };
 
-  const handleResolution = async () => {
+  const handleResolution = async (status: PatientStatus) => {
       if (!patient || !id) return;
-      
-      if (!window.confirm("Confirmar resolução do caso? As evoluções futuras agendadas serão canceladas.")) {
-          return;
-      }
+      setIsProcessing(true);
 
       try {
-          // This service call automatically removes pending scheduled tasks and sets discharge time
-          await patientService.resolvePatient(id, PatientStatus.DISCHARGED);
-          
-          // Verify if it actually worked fully (if dischargeTime is missing in local update, it means fallback occurred)
-          // But we just reload data.
+          await patientService.resolvePatient(id, status);
           await loadData(id);
+          setShowResolveModal(false);
           
-          // Check if patient object has dischargeTime now
+          // Verify discharge time check
           const updatedP = await patientService.getPatientById(id);
           if (updatedP && !updatedP.dischargeTime) {
-              alert("Aviso: O paciente foi marcado como resolvido, mas a DATA da alta não pôde ser salva.\n\nMotivo: Coluna 'discharge_time' não existe no Supabase.\nSolução: Rode o SQL 'alter table patients add column discharge_time timestamptz;' no seu banco.");
+             // If dischargeTime is missing but status changed, it's the DB column issue.
           }
 
       } catch (error: any) {
           console.error("Erro ao resolver paciente:", error);
-          // Show detailed Supabase error if available
           const errorMessage = error.message || 'Erro desconhecido';
-          const details = error.details || error.hint || '';
-          alert(`ERRO CRÍTICO DE BANCO DE DADOS:\n${errorMessage}\n${details}\n\nVerifique o console (F12) para o JSON completo do erro.`);
+          alert(`Erro: ${errorMessage}`);
+      } finally {
+          setIsProcessing(false);
+      }
+  };
+  
+  const handleReopen = async () => {
+      if (!patient || !id) return;
+      if (!confirm("Deseja reabrir este prontuário? O paciente voltará para a lista de ativos e o status mudará para Trabalho de Parto Ativo.")) return;
+      
+      setIsProcessing(true);
+      try {
+          await patientService.reopenPatient(id);
+          await loadData(id);
+      } catch (error: any) {
+          console.error("Erro ao reabrir:", error);
+          alert("Erro ao reabrir prontuário.");
+      } finally {
+          setIsProcessing(false);
       }
   };
 
@@ -103,8 +117,26 @@ const PatientDetails: React.FC = () => {
   if (loading) return <div className="p-8 text-center">Carregando dados...</div>;
   if (!patient) return <div className="p-8 text-center text-red-500">Paciente não encontrado</div>;
 
-  const isResolved = patient.status === PatientStatus.DISCHARGED || patient.status === PatientStatus.PARTOGRAM_OPENED;
+  const isResolved = [PatientStatus.DISCHARGED, PatientStatus.PARTOGRAM_OPENED, PatientStatus.DELIVERY, PatientStatus.C_SECTION].includes(patient.status);
   
+  // Display Status Helpers
+  let statusIcon = <CheckCircle2 className="w-5 h-5" />;
+  let statusText = patient.status;
+  let statusColor = "bg-slate-50 border-slate-200 text-slate-600";
+  
+  if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
+      statusColor = "bg-green-50 border-green-200 text-green-800";
+      statusText = "Partograma Aberto";
+  } else if (patient.status === PatientStatus.DELIVERY) {
+      statusColor = "bg-teal-50 border-teal-200 text-teal-800";
+      statusIcon = <Baby className="w-5 h-5" />;
+      statusText = "Parto Normal";
+  } else if (patient.status === PatientStatus.C_SECTION) {
+      statusColor = "bg-indigo-50 border-indigo-200 text-indigo-800";
+      statusIcon = <Scissors className="w-5 h-5" />;
+      statusText = "Cesárea";
+  }
+
   // Pending tasks
   const pendingTasks = (patient.schedule || [])
     .filter(t => t.status === 'pending')
@@ -129,7 +161,14 @@ const PatientDetails: React.FC = () => {
                     <Edit2 className="w-4 h-4" />
                 </Link>
             </div>
-            <p className="text-sm text-slate-500">
+            
+            {patient.babyName && (
+                <p className="text-xs text-slate-600 font-medium flex items-center gap-1">
+                    <Baby className="w-3 h-3" /> Bebê: {patient.babyName}
+                </p>
+            )}
+
+            <p className="text-sm text-slate-500 mt-1">
               {patient.parity} • {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}d
             </p>
             <div className="flex flex-wrap gap-2 mt-1">
@@ -150,30 +189,97 @@ const PatientDetails: React.FC = () => {
         
         {!isResolved ? (
              <button 
-                onClick={handleResolution}
+                onClick={() => setShowResolveModal(true)}
                 className="flex flex-col items-center justify-center p-2 text-medical-700 bg-medical-50 hover:bg-medical-100 rounded-lg border border-medical-200 transition-colors shadow-sm"
              >
                 <CheckCircle2 className="w-5 h-5" />
-                <span className="text-[10px] font-bold">Resolução</span>
+                <span className="text-[10px] font-bold">Desfecho</span>
              </button>
         ) : (
-             <div className="px-3 py-1 bg-slate-100 text-slate-500 border border-slate-200 rounded-lg text-xs font-bold uppercase flex flex-col items-end">
-                <span>{patient.status === PatientStatus.PARTOGRAM_OPENED ? 'Partograma' : 'Resolvido'}</span>
-                {patient.dischargeTime && (
-                    <span className="text-[9px] font-normal">{new Date(patient.dischargeTime).toLocaleDateString()}</span>
-                )}
-            </div>
+             <button
+                onClick={handleReopen}
+                disabled={isProcessing}
+                className="flex flex-col items-center justify-center p-2 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors shadow-sm disabled:opacity-50"
+             >
+                <RotateCcw className="w-4 h-4" />
+                <span className="text-[10px] font-bold">Reabrir</span>
+             </button>
         )}
       </div>
 
+      {/* RESOLUTION MODAL */}
+      {showResolveModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+             <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-200">
+                 <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                     <h3 className="font-bold text-slate-800">Definir Desfecho</h3>
+                     <button onClick={() => setShowResolveModal(false)} className="p-1 rounded-full hover:bg-slate-100">
+                         <X className="w-5 h-5 text-slate-400" />
+                     </button>
+                 </div>
+                 <div className="p-4 space-y-3">
+                     <p className="text-xs text-slate-500 mb-2">Selecione o tipo de resolução para encerrar o acompanhamento:</p>
+                     
+                     <button 
+                        disabled={isProcessing}
+                        onClick={() => handleResolution(PatientStatus.DELIVERY)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 transition-colors"
+                     >
+                         <div className="bg-teal-200 p-2 rounded-full"><Baby className="w-5 h-5 text-teal-700" /></div>
+                         <div className="text-left">
+                             <div className="font-bold">Parto Normal</div>
+                             <div className="text-[10px] opacity-80">Encerra monitoramento</div>
+                         </div>
+                     </button>
+
+                     <button 
+                        disabled={isProcessing}
+                        onClick={() => handleResolution(PatientStatus.C_SECTION)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 transition-colors"
+                     >
+                         <div className="bg-indigo-200 p-2 rounded-full"><Scissors className="w-5 h-5 text-indigo-700" /></div>
+                         <div className="text-left">
+                             <div className="font-bold">Cesárea</div>
+                             <div className="text-[10px] opacity-80">Encerra monitoramento</div>
+                         </div>
+                     </button>
+
+                     <button 
+                        disabled={isProcessing}
+                        onClick={() => handleResolution(PatientStatus.PARTOGRAM_OPENED)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 text-green-800 transition-colors"
+                     >
+                         <div className="bg-green-200 p-2 rounded-full"><CheckCircle2 className="w-5 h-5 text-green-700" /></div>
+                         <div className="text-left">
+                             <div className="font-bold">Partograma Aberto</div>
+                             <div className="text-[10px] opacity-80">Monitoramento migrado para papel</div>
+                         </div>
+                     </button>
+
+                     <button 
+                        disabled={isProcessing}
+                        onClick={() => handleResolution(PatientStatus.DISCHARGED)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors"
+                     >
+                         <div className="bg-slate-200 p-2 rounded-full"><Archive className="w-5 h-5 text-slate-600" /></div>
+                         <div className="text-left">
+                             <div className="font-bold">Alta / Transferência</div>
+                             <div className="text-[10px] opacity-80">Remove da lista ativa</div>
+                         </div>
+                     </button>
+                 </div>
+             </div>
+        </div>
+      )}
+
       {/* Resolved Banner */}
       {isResolved && (
-          <div className={`border p-4 rounded-xl flex items-center gap-3 ${patient.status === PatientStatus.PARTOGRAM_OPENED ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-              <CheckCircle2 className="w-5 h-5" />
+          <div className={`border p-4 rounded-xl flex items-center gap-3 ${statusColor}`}>
+              {statusIcon}
               <div className="text-sm">
-                  <p className="font-bold">Caso Resolvido</p>
+                  <p className="font-bold">{statusText}</p>
                   <p className="text-xs opacity-80">
-                      {patient.dischargeTime ? `Data: ${new Date(patient.dischargeTime).toLocaleString()}` : 'Data não registrada (verifique BD).'}
+                      Data: {new Date(patient.dischargeTime || '').toLocaleString()}
                       <br/>
                       Cronograma futuro cancelado automaticamente.
                   </p>
@@ -261,14 +367,13 @@ const PatientDetails: React.FC = () => {
                    <span className="text-xs text-slate-400">
                      {new Date(obs.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                    </span>
-                   {!isResolved && (
-                     <Link 
-                      to={`/patient/${id}/edit-observation/${obs.id}`}
-                      className="p-1.5 text-slate-300 hover:text-medical-600 hover:bg-slate-50 rounded-full transition-colors"
-                     >
-                       <Edit2 className="w-3 h-3" />
-                     </Link>
-                   )}
+                   {/* Allow editing observations even if resolved, for correction */}
+                   <Link 
+                    to={`/patient/${id}/edit-observation/${obs.id}`}
+                    className="p-1.5 text-slate-300 hover:text-medical-600 hover:bg-slate-50 rounded-full transition-colors"
+                   >
+                     <Edit2 className="w-3 h-3" />
+                   </Link>
                  </div>
 
                  <div className="grid grid-cols-2 gap-y-4 gap-x-2">

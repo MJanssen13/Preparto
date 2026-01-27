@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { Patient, PatientStatus, ScheduledTask } from '../types';
-import { ArrowLeft, Pill, Beaker, Save, Trash2, AlertTriangle, Lock, CalendarClock, Plus, X, Power, Check, StopCircle } from 'lucide-react';
+import { ArrowLeft, Pill, Beaker, Save, Trash2, AlertTriangle, Lock, CalendarClock, Plus, X, Power, Check, StopCircle, Baby } from 'lucide-react';
 
 // Added 'Dinâmica'
 const PARAM_OPTIONS = ['BCF', 'Dinâmica', 'PA', 'FC', 'Medicação', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX', 'DXT'];
@@ -17,6 +17,7 @@ const EditPatient: React.FC = () => {
   
   const [formData, setFormData] = useState({
     name: '',
+    babyName: '',
     bed: '',
     riskFactors: '',
     
@@ -39,6 +40,7 @@ const EditPatient: React.FC = () => {
                 setPatientStatus(p.status);
                 setFormData({
                     name: p.name,
+                    babyName: p.babyName || '',
                     bed: p.bed,
                     riskFactors: p.riskFactors ? p.riskFactors.join(', ') : '',
                     
@@ -66,6 +68,7 @@ const EditPatient: React.FC = () => {
     try {
       await patientService.updatePatient(id, {
         name: formData.name,
+        babyName: formData.babyName,
         bed: formData.bed,
         riskFactors: formData.riskFactors ? formData.riskFactors.split(',').map(s => s.trim()) : [],
         
@@ -275,6 +278,20 @@ const EditPatient: React.FC = () => {
                 type="text"
                 className="w-full p-3 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none"
                 value={formData.name}
+                onChange={handleChange}
+              />
+            </div>
+
+            {/* Baby Name */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">
+                  <Baby className="w-4 h-4" /> Nome do Bebê (Opcional)
+              </label>
+              <input
+                name="babyName"
+                type="text"
+                className="w-full p-3 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none"
+                value={formData.babyName}
                 onChange={handleChange}
               />
             </div>

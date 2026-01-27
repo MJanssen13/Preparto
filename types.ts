@@ -5,7 +5,9 @@ export enum PatientStatus {
   INDUCTION = 'Indução',
   POSTPARTUM = 'Puerpério Imediato',
   PARTOGRAM_OPENED = 'Partograma Aberto',
-  DISCHARGED = 'Alta/Transferência'
+  DISCHARGED = 'Alta/Transferência',
+  DELIVERY = 'Parto Normal',
+  C_SECTION = 'Cesárea'
 }
 
 export enum MembraneStatus {
@@ -83,6 +85,7 @@ export interface ScheduledTask {
 export interface Patient {
   id: string;
   name: string;
+  babyName?: string; // Nome do bebê
   bed: string;
   age: number;
   gestationalAgeWeeks: number;
@@ -102,7 +105,7 @@ export interface Patient {
   magnesiumSulfateStartTime?: string;
   magnesiumSulfateEndTime?: string;
 
-  dischargeTime?: string; // Data/Hora da alta para cálculo de expiração (72h)
+  dischargeTime?: string | null; // Changed to allow null for reopening
   lastObservation?: Observation;
   schedule: ScheduledTask[]; // Novo sistema de agendamento
   observations?: Observation[]; // Histórico para cálculos de média/min/max

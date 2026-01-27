@@ -2,7 +2,7 @@
 import React from 'react';
 import { Patient, PatientStatus } from '../types';
 import { get24hStats } from '../services/supabaseService';
-import { Clock, Activity, Ruler, BedDouble, CheckCircle2, Archive, ArrowDownUp } from 'lucide-react';
+import { Clock, Activity, Ruler, BedDouble, CheckCircle2, Archive, ArrowDownUp, Baby, Scissors } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface PatientCardProps {
@@ -11,18 +11,18 @@ interface PatientCardProps {
 
 const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
   const lastObs = patient.lastObservation;
-  const isDischarged = patient.status === PatientStatus.DISCHARGED;
   const isPartogram = patient.status === PatientStatus.PARTOGRAM_OPENED;
-  const isResolved = isDischarged || isPartogram;
+  const isDelivery = patient.status === PatientStatus.DELIVERY;
+  const isCSection = patient.status === PatientStatus.C_SECTION;
+  const isDischarged = patient.status === PatientStatus.DISCHARGED;
+  
+  const isResolved = isDischarged || isPartogram || isDelivery || isCSection;
 
   // Calculate 24h stats for PA and BCF ranges
   const stats = get24hStats(patient.observations);
 
   // --- LAST KNOWN VALUES LOGIC ---
-  // We search history because the VERY last observation might be just a BP check, 
-  // but we still want to see the last Dilation/Dynamics measured 2 hours ago.
   const history = patient.observations || [];
-  // (History is sorted desc in service, but let's be safe)
   
   const lastDilationObs = history.find(o => 
       o.obstetric.dilation !== undefined || 
@@ -45,6 +45,9 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
   // Border and Background styling based on status
   let cardStyle = "border-slate-200 bg-white";
   let bedBadgeStyle = "bg-medical-50 text-medical-700 border-medical-100";
+  let statusIcon = <Archive className="w-3 h-3" />;
+  let statusLabel = 'ALTA / TRANSFERÊNCIA';
+  let statusTextColor = 'text-slate-500';
 
   if (isDischarged) {
       cardStyle = "border-slate-200 bg-slate-50 opacity-80";
@@ -52,6 +55,21 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
   } else if (isPartogram) {
       cardStyle = "border-green-200 bg-green-50/30";
       bedBadgeStyle = "bg-green-100 text-green-700 border-green-200";
+      statusIcon = <CheckCircle2 className="w-3 h-3" />;
+      statusLabel = 'PARTOGRAMA ABERTO';
+      statusTextColor = 'text-green-600';
+  } else if (isDelivery) {
+      cardStyle = "border-teal-200 bg-teal-50/30";
+      bedBadgeStyle = "bg-teal-100 text-teal-700 border-teal-200";
+      statusIcon = <Baby className="w-3 h-3" />;
+      statusLabel = 'PARTO NORMAL';
+      statusTextColor = 'text-teal-600';
+  } else if (isCSection) {
+      cardStyle = "border-indigo-200 bg-indigo-50/30";
+      bedBadgeStyle = "bg-indigo-100 text-indigo-700 border-indigo-200";
+      statusIcon = <Scissors className="w-3 h-3" />;
+      statusLabel = 'CESÁREA';
+      statusTextColor = 'text-indigo-600';
   }
 
   return (
@@ -66,7 +84,12 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
 
         <div className="mb-3 pr-20">
           <h3 className="text-lg font-bold text-slate-900 truncate">{patient.name}</h3>
-          <p className="text-sm text-slate-500">
+          {patient.babyName && (
+              <p className="text-xs text-slate-600 font-medium flex items-center gap-1 mt-0.5">
+                  <Baby className="w-3 h-3" /> Bebê: {patient.babyName}
+              </p>
+          )}
+          <p className="text-sm text-slate-500 mt-1">
              G{patient.gestationalAgeWeeks}+{patient.gestationalAgeDays} • {patient.parity}
           </p>
         </div>
@@ -125,13 +148,13 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
         <div className="mt-3 flex items-center justify-between text-xs">
           {isResolved ? (
              <div className="flex flex-col w-full gap-1">
-                 <div className={`flex items-center gap-1 font-bold ${isPartogram ? 'text-green-600' : 'text-slate-500'}`}>
-                     {isPartogram ? <CheckCircle2 className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
-                     <span>{isPartogram ? 'EM PARTOGRAMA' : 'ALTA / TRANSFERÊNCIA'}</span>
+                 <div className={`flex items-center gap-1 font-bold ${statusTextColor}`}>
+                     {statusIcon}
+                     <span>{statusLabel}</span>
                  </div>
                  {patient.dischargeTime && (
                      <div className="text-slate-400 text-[10px]">
-                        Resolvido em: {new Date(patient.dischargeTime).toLocaleString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'})}
+                        {new Date(patient.dischargeTime).toLocaleString([], {day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit'})}
                      </div>
                  )}
              </div>

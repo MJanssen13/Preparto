@@ -22,11 +22,20 @@ const STORAGE_KEY_OBSERVATIONS = 'maternocare_observations';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const isPatientResolved = (status: PatientStatus) => {
+    return [
+        PatientStatus.DISCHARGED, 
+        PatientStatus.PARTOGRAM_OPENED,
+        PatientStatus.DELIVERY,
+        PatientStatus.C_SECTION
+    ].includes(status);
+};
+
 const isPatientExpired = (p: Patient): boolean => {
-  // Check if patient is resolved (Discharged or Partogram Opened) and has a discharge time
-  const isResolved = p.status === PatientStatus.DISCHARGED || p.status === PatientStatus.PARTOGRAM_OPENED;
+  // Check if patient is resolved and has a discharge time
+  const isResolved = isPatientResolved(p.status);
   
-  // If we don't have dischargeTime (because DB column is missing), we keep patient visible but resolved.
+  // If we don't have dischargeTime (because DB column is missing or active), return false
   if (!isResolved) return false;
   if (!p.dischargeTime) return false; 
   
@@ -37,8 +46,9 @@ const isPatientExpired = (p: Patient): boolean => {
 };
 
 const mapPatientToDB = (p: Partial<Patient>) => {
-  return {
+  const payload: any = {
     ...(p.name && { name: p.name }),
+    ...(p.babyName && { baby_name: p.babyName }),
     ...(p.bed && { bed: p.bed }),
     ...(p.age && { age: p.age }),
     ...(p.gestationalAgeWeeks && { gestational_age_weeks: p.gestationalAgeWeeks }),
@@ -58,17 +68,26 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     ...(p.magnesiumSulfateStartTime !== undefined && { magnesium_sulfate_start_time: p.magnesiumSulfateStartTime }),
     ...(p.magnesiumSulfateEndTime !== undefined && { magnesium_sulfate_end_time: p.magnesiumSulfateEndTime }),
 
-    ...(p.dischargeTime && { discharge_time: p.dischargeTime }),
-    // Check explicitly for array to allow sending empty arrays (important for clearing schedule)
+    // Schedule and Observations
     ...(Array.isArray(p.schedule) && { schedule: p.schedule }),
     ...(p.lastObservation && { last_observation: p.lastObservation })
   };
+
+  // Explicitly handle discharge_time to allow NULL (for reopening)
+  if (p.dischargeTime === null) {
+      payload.discharge_time = null;
+  } else if (p.dischargeTime) {
+      payload.discharge_time = p.dischargeTime;
+  }
+
+  return payload;
 };
 
 const mapPatientFromDB = (db: any): Patient => {
   return {
     id: db.id,
     name: db.name,
+    babyName: db.baby_name,
     bed: db.bed,
     age: db.age,
     gestationalAgeWeeks: db.gestational_age_weeks,
@@ -189,8 +208,8 @@ export const patientService = {
 
         patients = patients.filter(p => !isPatientExpired(p));
         return patients.sort((a, b) => {
-            const aResolved = a.status === PatientStatus.DISCHARGED || a.status === PatientStatus.PARTOGRAM_OPENED;
-            const bResolved = b.status === PatientStatus.DISCHARGED || b.status === PatientStatus.PARTOGRAM_OPENED;
+            const aResolved = isPatientResolved(a.status);
+            const bResolved = isPatientResolved(b.status);
             
             if (aResolved && !bResolved) return 1;
             if (bResolved && !aResolved) return -1;
@@ -264,9 +283,8 @@ export const patientService = {
     const dbPayload = mapPatientToDB(updates);
     const { data, error } = await supabase.from('patients').update(dbPayload).eq('id', id).select().single();
     if (error) {
-        // --- LOGGING THE SUPABASE ERROR FOR DEBUGGING ---
         console.error("Supabase update error:", JSON.stringify(error, null, 2));
-        throw error; // Throw so we can catch it in the component
+        throw error;
     }
     return mapPatientFromDB(data);
   },
@@ -296,18 +314,35 @@ export const patientService = {
           if (!result) throw new Error('Failed to resolve patient (Database update returned null)');
       } catch (error: any) {
           // CHECK FOR MISSING COLUMN ERROR (PGRST204 means column missing in schema)
-          // Specifically if 'discharge_time' is missing
           if (error?.code === 'PGRST204' && (error?.message?.includes('discharge_time') || error?.details?.includes('discharge_time'))) {
               console.warn("⚠️ COLUNA 'discharge_time' AUSENTE. Tentando resolver sem salvar data de alta.");
-              
-              // Fallback: Try again WITHOUT dischargeTime
-              // This ensures the status changes and schedule is cleared, even if expiration logic won't work perfectly.
               const { dischargeTime, ...fallbackUpdates } = updates;
               await this.updatePatient(id, fallbackUpdates);
               return; 
           }
-          // If it's another error, rethrow it
           throw error;
+      }
+  },
+
+  // NEW: Reopen Patient Logic
+  async reopenPatient(id: string): Promise<void> {
+      console.log('Reopening patient:', id);
+      
+      const updates: Partial<Patient> = {
+          status: PatientStatus.ACTIVE_LABOR, // Reset to active
+          dischargeTime: null // Clear discharge time
+      };
+
+      try {
+          await this.updatePatient(id, updates);
+      } catch (error: any) {
+           // Fallback if discharge_time column is missing (it can't be set to null if it doesn't exist, but the update might fail if we try)
+           if (error?.code === 'PGRST204') {
+               console.warn("⚠️ COLUNA 'discharge_time' AUSENTE. Reabrindo apenas mudando status.");
+               await this.updatePatient(id, { status: PatientStatus.ACTIVE_LABOR });
+               return;
+           }
+           throw error;
       }
   },
 
@@ -414,7 +449,6 @@ export const patientService = {
     const newObs = mapObservationFromDB(data);
     
     // Update Patient (Secondary) - Safe update
-    // If this fails (e.g. missing column in patient table), we catch it so we don't think observation failed
     try {
         await this.updatePatient(newObs.patientId, { lastObservation: newObs });
 

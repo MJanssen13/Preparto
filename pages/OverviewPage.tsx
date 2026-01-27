@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, Observation } from '../types';
 import { patientService, get24hStats } from '../services/supabaseService';
-import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText, Filter, BedDouble, AlertCircle, Maximize2, Minimize2, X, Trash2 } from 'lucide-react';
+import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText, Filter, BedDouble, AlertCircle, Maximize2, Minimize2, X, Trash2, ArrowDownAZ, ArrowDown01, Baby } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { VitalCharts } from '../components/VitalCharts';
 
@@ -277,12 +277,18 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
     );
 };
 
+type FilterType = 'all' | 'active' | 'resolved';
+type SortType = 'name' | 'bed';
+
 const OverviewPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [copied, setCopied] = useState(false);
-  const [showResolved, setShowResolved] = useState(false);
+  
+  // Controls
+  const [filterType, setFilterType] = useState<FilterType>('active');
+  const [sortType, setSortType] = useState<SortType>('bed');
   
   // State for expanding rows
   const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
@@ -336,18 +342,37 @@ const OverviewPage: React.FC = () => {
       setLoadingObs(false);
   };
 
-  const activePatients = patients.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.bed.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Status Logic
-    const isResolved = p.status === PatientStatus.DISCHARGED || p.status === PatientStatus.PARTOGRAM_OPENED;
-    
-    if (showResolved) {
-        return matchesSearch; // Show everything if resolved is toggled on
-    }
-    return matchesSearch && !isResolved; // Otherwise only show active
-  });
+  const isResolved = (status: PatientStatus) => {
+      return [
+        PatientStatus.DISCHARGED, 
+        PatientStatus.PARTOGRAM_OPENED,
+        PatientStatus.DELIVERY,
+        PatientStatus.C_SECTION
+      ].includes(status);
+  };
+
+  const filteredPatients = patients
+    .filter(p => {
+        // Search Filter
+        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              p.bed.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // Status Filter
+        const resolved = isResolved(p.status);
+        if (filterType === 'active') return matchesSearch && !resolved;
+        if (filterType === 'resolved') return matchesSearch && resolved;
+        return matchesSearch; // 'all'
+    })
+    .sort((a, b) => {
+        // Sort Logic
+        if (sortType === 'name') {
+            return a.name.localeCompare(b.name);
+        } else {
+            // Bed sort (numeric aware)
+            return a.bed.localeCompare(b.bed, undefined, { numeric: true });
+        }
+    });
+
 
   const getNextTask = (p: Patient) => {
     return (p.schedule || [])
@@ -362,49 +387,78 @@ const OverviewPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-24">
       {/* Header Area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-16 bg-slate-50 z-20 py-2">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Visão Geral do Plantão</h1>
-          <p className="text-slate-500 text-sm">Monitoramento consolidado e evolução</p>
+      <div className="flex flex-col gap-4 sticky top-16 bg-slate-50 z-20 py-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+            <h1 className="text-2xl font-bold text-slate-900">Visão Geral do Plantão</h1>
+            <p className="text-slate-500 text-sm">Monitoramento consolidado e evolução</p>
+            </div>
+
+            <button 
+                onClick={handleShare}
+                className="hidden md:flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-700 transition-colors active:scale-95 self-start md:self-auto"
+            >
+                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                <span>{copied ? 'Link Copiado!' : 'Compartilhar'}</span>
+            </button>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
             {/* Search */}
-            <div className="relative">
+            <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
                 type="text"
                 placeholder="Filtrar paciente ou leito..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-64 pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-medical-500 shadow-sm"
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-medical-500 shadow-sm"
                 />
             </div>
+            
+            {/* Toolbar: Filters & Sorting */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {/* Filter Group */}
+                <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
+                    <button 
+                    onClick={() => setFilterType('active')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'active' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                    Ativos
+                    </button>
+                    <button 
+                    onClick={() => setFilterType('resolved')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'resolved' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                    Resolvidos
+                    </button>
+                </div>
 
-            {/* Resolved Toggle */}
-            <button 
-                onClick={() => setShowResolved(!showResolved)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-bold text-xs shadow-sm transition-colors border ${showResolved ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-slate-500 border-slate-200'}`}
-            >
-                <Filter className="w-3 h-3" />
-                <span>{showResolved ? 'Ocultar Resolvidos' : 'Mostrar Resolvidos'}</span>
-            </button>
-
-            {/* Share Button */}
-            <button 
-                onClick={handleShare}
-                className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-700 transition-colors active:scale-95"
-            >
-                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                <span className="hidden sm:inline">{copied ? 'Link Copiado!' : 'Compartilhar'}</span>
-            </button>
+                {/* Sort Group */}
+                <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
+                    <button 
+                    onClick={() => setSortType('bed')}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'bed' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="Ordenar por Leito"
+                    >
+                    <ArrowDown01 className="w-3 h-3" />
+                    </button>
+                    <button 
+                    onClick={() => setSortType('name')}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'name' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                    title="Ordenar por Nome"
+                    >
+                    <ArrowDownAZ className="w-3 h-3" />
+                    </button>
+                </div>
+            </div>
         </div>
       </div>
 
       {/* MOBILE VIEW (CARDS) */}
       <div className="md:hidden space-y-4">
-        {activePatients.length > 0 ? (
-          activePatients.map(patient => {
+        {filteredPatients.length > 0 ? (
+          filteredPatients.map(patient => {
             const lastObs = patient.lastObservation;
             const stats = get24hStats(patient.observations);
             const history = patient.observations || [];
@@ -414,20 +468,16 @@ const OverviewPage: React.FC = () => {
                 o.obstetric.dilation !== undefined || 
                 (o.obstetric.cervixStatus && o.obstetric.cervixStatus.length > 0)
             );
-            const lastDynamicsObs = history.find(o => 
-                o.obstetric.dinamicaSummary || 
-                o.obstetric.dinamicaFrequency !== undefined
-            );
 
             const nextTask = getNextTask(patient);
             const isExpanded = expandedPatientId === patient.id;
-            const isResolved = patient.status === PatientStatus.DISCHARGED || patient.status === PatientStatus.PARTOGRAM_OPENED;
+            const resolved = isResolved(patient.status);
             const isBcfAbnormal = lastObs?.obstetric.bcf !== undefined && (lastObs.obstetric.bcf < 110 || lastObs.obstetric.bcf > 160);
 
             return (
               <div 
                 key={patient.id} 
-                className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all ${isExpanded ? 'border-medical-200 ring-2 ring-medical-100' : 'border-slate-200'} ${isResolved ? 'opacity-75 bg-slate-50' : ''}`}
+                className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all ${isExpanded ? 'border-medical-200 ring-2 ring-medical-100' : 'border-slate-200'} ${resolved ? 'opacity-75 bg-slate-50' : ''}`}
               >
                 {/* Card Header (Clickable to Expand) */}
                 <div 
@@ -435,27 +485,32 @@ const OverviewPage: React.FC = () => {
                   onClick={() => toggleExpand(patient.id)}
                 >
                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 flex flex-col items-center justify-center rounded-lg border font-bold text-lg ${isResolved ? 'bg-slate-200 text-slate-500 border-slate-300' : 'bg-medical-50 text-medical-700 border-medical-100'}`}>
+                      <div className={`w-12 h-12 flex flex-col items-center justify-center rounded-lg border font-bold text-lg ${resolved ? 'bg-slate-200 text-slate-500 border-slate-300' : 'bg-medical-50 text-medical-700 border-medical-100'}`}>
                          <span className="text-[8px] uppercase font-normal opacity-70">Leito</span>
                          {patient.bed}
                       </div>
                       <div>
                          <h3 className="font-bold text-slate-800">{patient.name}</h3>
-                         <div className="flex items-center gap-2 text-xs text-slate-500">
+                         {patient.babyName && (
+                            <p className="text-xs text-slate-500 flex items-center gap-1">
+                                <Baby className="w-3 h-3" /> {patient.babyName}
+                            </p>
+                         )}
+                         <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                              <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                                 {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}
                              </span>
                              <span>{patient.parity}</span>
-                             {isResolved && (
+                             {resolved && (
                                 <span className="bg-slate-600 text-white px-1.5 py-0.5 rounded font-bold">
-                                   {patient.status === PatientStatus.PARTOGRAM_OPENED ? 'PARTOGRAMA' : 'ALTA'}
+                                   {patient.status}
                                 </span>
                              )}
                          </div>
                       </div>
                    </div>
                    <div className="flex items-center gap-2">
-                      {isResolved && (
+                      {resolved && (
                           <button 
                             onClick={(e) => handleDelete(e, patient.id)}
                             className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
@@ -496,7 +551,7 @@ const OverviewPage: React.FC = () => {
                 )}
                 
                 {/* Next Task Footer */}
-                {!isExpanded && !isResolved && nextTask && (
+                {!isExpanded && !resolved && nextTask && (
                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2 text-xs">
                        <Clock className={`w-3 h-3 ${new Date(nextTask.timestamp) < new Date() ? 'text-red-500' : 'text-slate-400'}`} />
                        <span className={`font-bold ${new Date(nextTask.timestamp) < new Date() ? 'text-red-600' : 'text-slate-600'}`}>
@@ -528,7 +583,7 @@ const OverviewPage: React.FC = () => {
           })
         ) : (
           <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
-            {showResolved ? 'Nenhum paciente resolvido.' : 'Nenhum paciente ativo.'}
+             Nenhum paciente encontrado.
           </div>
         )}
       </div>
@@ -549,8 +604,8 @@ const OverviewPage: React.FC = () => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    {activePatients.length > 0 ? (
-                        activePatients.map(patient => {
+                    {filteredPatients.length > 0 ? (
+                        filteredPatients.map(patient => {
                             const lastObs = patient.lastObservation;
                             const stats = get24hStats(patient.observations);
                             const nextTask = getNextTask(patient);
@@ -560,7 +615,7 @@ const OverviewPage: React.FC = () => {
                             // Check for BCF abnormality on last observation
                             const isBcfAbnormal = lastObs?.obstetric.bcf !== undefined && (lastObs.obstetric.bcf < 110 || lastObs.obstetric.bcf > 160);
                             
-                            const isResolved = patient.status === PatientStatus.DISCHARGED || patient.status === PatientStatus.PARTOGRAM_OPENED;
+                            const resolved = isResolved(patient.status);
 
                             const history = patient.observations || [];
                             // --- LAST KNOWN VALUES LOGIC ---
@@ -572,7 +627,7 @@ const OverviewPage: React.FC = () => {
                             return (
                                 <React.Fragment key={patient.id}>
                                     <tr 
-                                        className={`transition-colors cursor-pointer ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'} ${isResolved ? 'bg-slate-50 opacity-70' : ''}`}
+                                        className={`transition-colors cursor-pointer ${isExpanded ? 'bg-slate-50' : 'hover:bg-slate-50/80'} ${resolved ? 'bg-slate-50 opacity-70' : ''}`}
                                         onClick={() => toggleExpand(patient.id)}
                                     >
                                         <td className="p-4 text-center">
@@ -581,7 +636,7 @@ const OverviewPage: React.FC = () => {
                                         
                                         {/* Bed */}
                                         <td className="p-4 text-center">
-                                            <div className={`text-xl font-bold rounded-lg py-2 border inline-block w-12 text-center ${isResolved ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-medical-50 text-medical-700 border-medical-100'}`}>
+                                            <div className={`text-xl font-bold rounded-lg py-2 border inline-block w-12 text-center ${resolved ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-medical-50 text-medical-700 border-medical-100'}`}>
                                                 {patient.bed}
                                             </div>
                                         </td>
@@ -592,6 +647,11 @@ const OverviewPage: React.FC = () => {
                                                 <span className="font-bold text-slate-900 text-base">
                                                     {patient.name}
                                                 </span>
+                                                {patient.babyName && (
+                                                    <span className="text-xs text-slate-500 flex items-center gap-1">
+                                                        <Baby className="w-3 h-3" /> {patient.babyName}
+                                                    </span>
+                                                )}
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded border border-slate-200">
                                                         {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}
@@ -663,9 +723,9 @@ const OverviewPage: React.FC = () => {
 
                                         {/* Status / Schedule */}
                                         <td className="p-4">
-                                            {isResolved ? (
+                                            {resolved ? (
                                                 <div className="text-xs font-bold text-slate-500 uppercase bg-slate-100 px-2 py-1 rounded inline-block border border-slate-200">
-                                                    {patient.status === PatientStatus.PARTOGRAM_OPENED ? 'Partograma' : 'Alta/Transf.'}
+                                                    {patient.status}
                                                 </div>
                                             ) : nextTask ? (
                                                 <div className="flex items-start gap-2">
@@ -699,7 +759,7 @@ const OverviewPage: React.FC = () => {
                                         {/* Action */}
                                         <td className="p-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                {isResolved && (
+                                                {resolved && (
                                                     <button 
                                                         onClick={(e) => handleDelete(e, patient.id)}
                                                         className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
@@ -735,7 +795,7 @@ const OverviewPage: React.FC = () => {
                     ) : (
                         <tr>
                             <td colSpan={7} className="p-8 text-center text-slate-400 italic">
-                                {showResolved ? 'Nenhum paciente resolvido encontrado.' : 'Nenhum paciente ativo encontrado com estes filtros.'}
+                                Nenhum paciente encontrado com estes filtros.
                             </td>
                         </tr>
                     )}
@@ -744,7 +804,7 @@ const OverviewPage: React.FC = () => {
         </div>
         
         <div className="bg-slate-50 p-3 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
-            <span>Mostrando {activePatients.length} pacientes</span>
+            <span>Mostrando {filteredPatients.length} pacientes</span>
             <div className="flex items-center gap-2">
                <div className="w-2 h-2 rounded-full bg-red-100 ml-2"></div> Atrasado
             </div>
