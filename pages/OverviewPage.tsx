@@ -29,6 +29,9 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
         }
 
         if (o.bloodOnGlove !== undefined) parts.push(o.bloodOnGlove ? 'SDL' : 'SSDL');
+        
+        if (o.cervixObservation) parts.push(`Obs: ${o.cervixObservation}`);
+
         return parts.length > 0 ? `TOQUE: ${parts.join(', ')}` : '';
     };
 
@@ -185,6 +188,11 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                                                     {obs.obstetric.membranes && (
                                                         <span className="text-[10px] bg-slate-100 px-1 rounded w-fit mt-0.5 border border-slate-200">
                                                             {obs.obstetric.membranes}
+                                                        </span>
+                                                    )}
+                                                    {obs.obstetric.cervixObservation && (
+                                                        <span className="text-[10px] text-slate-600 italic block mt-0.5">
+                                                            Obs: {obs.obstetric.cervixObservation}
                                                         </span>
                                                     )}
                                                 </div>

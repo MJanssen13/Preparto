@@ -110,6 +110,11 @@ const PatientDetails: React.FC = () => {
       if (o.bloodOnGlove !== undefined) {
           parts.push(o.bloodOnGlove ? 'SDL' : 'SSDL');
       }
+      
+      // Observação extra
+      if (o.cervixObservation) {
+          parts.push(`Obs: ${o.cervixObservation}`);
+      }
 
       return parts.length > 0 ? parts.join(', ') : null;
   };

@@ -47,6 +47,7 @@ export interface ObstetricData {
   
   membranes?: MembraneStatus;
   bloodOnGlove?: boolean; // Sangue em dedo de luva (SDL) ou Sem sangue (SSDL)
+  cervixObservation?: string; // Observações livres do toque
 }
 
 export interface MagnesiumData {

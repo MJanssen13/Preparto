@@ -44,6 +44,7 @@ const ObservationForm: React.FC = () => {
     cervixConsistency: '',
     membranes: '' as MembraneStatus | '', // CHANGED: Default is empty, not INTACT
     bloodOnGlove: false, // NEW: SDL (true) / SSDL (false)
+    cervixObservation: '', // NEW: Observações do toque
     paSys: '',
     paDia: '',
     paSysStanding: '',
@@ -226,6 +227,7 @@ const ObservationForm: React.FC = () => {
                        cervixConsistency: obs.obstetric.cervixConsistency || '',
                        membranes: obs.obstetric.membranes || '' as MembraneStatus,
                        bloodOnGlove: obs.obstetric.bloodOnGlove || false,
+                       cervixObservation: obs.obstetric.cervixObservation || '',
                        paSys: obs.vitals.paSystolic !== undefined ? String(obs.vitals.paSystolic) : '',
                        paDia: obs.vitals.paDiastolic !== undefined ? String(obs.vitals.paDiastolic) : '',
                        paSysStanding: obs.vitals.paStandingSystolic ? String(obs.vitals.paStandingSystolic) : '',
@@ -329,7 +331,8 @@ const ObservationForm: React.FC = () => {
           cervixConsistency: activeParams.includes('Toque') ? (formData.cervixConsistency as any) : undefined,
           // Only send membranes if Toque is active AND user selected a value (not empty string)
           membranes: activeParams.includes('Toque') && formData.membranes !== '' ? (formData.membranes as MembraneStatus) : undefined,
-          bloodOnGlove: activeParams.includes('Toque') ? formData.bloodOnGlove : undefined
+          bloodOnGlove: activeParams.includes('Toque') ? formData.bloodOnGlove : undefined,
+          cervixObservation: activeParams.includes('Toque') ? formData.cervixObservation : undefined
         },
         medication: {
           // Changed check from 'Meds' to 'Medicação'
@@ -677,6 +680,19 @@ const ObservationForm: React.FC = () => {
                           </div>
                        </label>
                        <p className="text-[10px] text-right text-slate-400 mt-1">{formData.bloodOnGlove ? 'SDL (Com Sangue)' : 'SSDL (Sem Sangue)'}</p>
+                    </div>
+
+                    {/* Novo campo de observações do toque */}
+                    <div className="col-span-2 mt-2 pt-2 border-t border-slate-100">
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Observações do Toque</label>
+                        <textarea 
+                            name="cervixObservation" 
+                            className="w-full p-3 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-medical-500 focus:outline-none transition-colors" 
+                            rows={2} 
+                            placeholder="Ex: Colo posterior, grosso, difícil acesso..." 
+                            value={formData.cervixObservation} 
+                            onChange={handleChange} 
+                        />
                     </div>
                 </div>
              </section>
