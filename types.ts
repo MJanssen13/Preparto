@@ -18,6 +18,7 @@ export interface VitalSigns {
   fc?: number; // Frequência Cardíaca (bpm)
   tax?: number; // Temperatura Axilar (C)
   spo2?: number; // Saturação de Oxigênio (%)
+  dxt?: number; // Glicemia Capilar (mg/dL)
   paSystolic?: number; // Pressão Arterial Sistólica (Sentada/Padrão)
   paDiastolic?: number; // Pressão Arterial Diastólica (Sentada/Padrão)
   paPosition?: 'sitting' | 'standing'; // Deprecated logic, but kept for compatibility. Now defaults to sitting.
@@ -54,7 +55,8 @@ export interface MagnesiumData {
 
 export interface Medication {
   misoprostolDose?: number; // mcg
-  oxytocinDose?: number; // mU/min ou ml/h
+  misoprostolCount?: number; // Qual número da dose (ex: 1º, 2º)
+  oxytocinDose?: number; // ml/h
   antibiotic?: string;
   notes?: string;
 }
@@ -103,4 +105,5 @@ export interface Patient {
   dischargeTime?: string; // Data/Hora da alta para cálculo de expiração (72h)
   lastObservation?: Observation;
   schedule: ScheduledTask[]; // Novo sistema de agendamento
+  observations?: Observation[]; // Histórico para cálculos de média/min/max
 }

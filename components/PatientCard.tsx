@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { Patient, PatientStatus } from '../types';
-import { Clock, Activity, Ruler, BedDouble, CheckCircle2, Archive } from 'lucide-react';
+import { get24hStats } from '../services/supabaseService';
+import { Clock, Activity, Ruler, BedDouble, CheckCircle2, Archive, ArrowDownUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface PatientCardProps {
@@ -13,6 +14,25 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
   const isDischarged = patient.status === PatientStatus.DISCHARGED;
   const isPartogram = patient.status === PatientStatus.PARTOGRAM_OPENED;
   const isResolved = isDischarged || isPartogram;
+
+  // Calculate 24h stats for PA and BCF ranges
+  const stats = get24hStats(patient.observations);
+
+  // --- LAST KNOWN VALUES LOGIC ---
+  // We search history because the VERY last observation might be just a BP check, 
+  // but we still want to see the last Dilation/Dynamics measured 2 hours ago.
+  const history = patient.observations || [];
+  // (History is sorted desc in service, but let's be safe)
+  
+  const lastDilationObs = history.find(o => 
+      o.obstetric.dilation !== undefined || 
+      (o.obstetric.cervixStatus && o.obstetric.cervixStatus.length > 0)
+  );
+
+  const lastDynamicsObs = history.find(o => 
+      o.obstetric.dinamicaSummary || 
+      o.obstetric.dinamicaFrequency !== undefined
+  );
 
   // Find next pending task
   const nextTask = (patient.schedule || [])
@@ -53,36 +73,53 @@ const PatientCard: React.FC<PatientCardProps> = ({ patient }) => {
 
         {/* Quick Vitals Grid */}
         <div className="grid grid-cols-3 gap-2 mt-4">
+          
+          {/* Dynamics - Last Known */}
           <div className="bg-white/60 p-2 rounded-lg flex flex-col items-center justify-center border border-slate-100">
             <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
               <Activity className="w-3 h-3" />
               <span>Dinâm</span>
             </div>
-            <span className="font-bold text-slate-700">
-              {lastObs && lastObs.obstetric.dinamicaFrequency !== undefined ? `${lastObs.obstetric.dinamicaFrequency}/10'` : '-'}
+            <span className="font-bold text-slate-700 text-sm text-center leading-tight">
+              {lastDynamicsObs 
+                ? (lastDynamicsObs.obstetric.dinamicaSummary || `${lastDynamicsObs.obstetric.dinamicaFrequency}/10'`)
+                : '-'
+              }
             </span>
           </div>
 
+          {/* BCF - 24h Range */}
           <div className="bg-white/60 p-2 rounded-lg flex flex-col items-center justify-center border border-slate-100">
             <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
               <Activity className={`w-3 h-3 ${isBcfAbnormal ? 'text-red-500' : 'text-rose-500'}`} />
-              <span>BCF</span>
+              <span>BCF (24h)</span>
             </div>
             <span className={`font-bold ${isBcfAbnormal ? 'text-red-600' : 'text-slate-700'}`}>
-              {lastObs && lastObs.obstetric.bcf !== undefined ? lastObs.obstetric.bcf : '-'}
+              {stats?.hasBcf ? stats.bcf : (lastObs?.obstetric.bcf || '-')}
             </span>
           </div>
 
+          {/* Dilation - Last Known */}
           <div className="bg-white/60 p-2 rounded-lg flex flex-col items-center justify-center border border-slate-100">
             <div className="flex items-center gap-1 text-xs text-slate-400 mb-1">
               <Ruler className="w-3 h-3" />
               <span>Dilat</span>
             </div>
             <span className="font-bold text-slate-700">
-              {lastObs && lastObs.obstetric.dilation !== undefined ? `${lastObs.obstetric.dilation} cm` : '-'}
+              {lastDilationObs 
+                 ? (lastDilationObs.obstetric.dilation !== undefined ? `${lastDilationObs.obstetric.dilation} cm` : (lastDilationObs.obstetric.cervixStatus?.join(' '))) 
+                 : '-'}
             </span>
           </div>
         </div>
+        
+        {/* Additional 24h PA Row */}
+        {stats?.hasPa && (
+            <div className="mt-2 bg-slate-50/80 px-2 py-1.5 rounded-lg border border-slate-100 flex items-center justify-center gap-2 text-xs">
+                <span className="font-bold text-slate-500 uppercase text-[10px]">PA (24h):</span>
+                <span className="font-mono text-slate-700 font-bold">{stats.pas} x {stats.pad}</span>
+            </div>
+        )}
 
         {/* Footer Info / Resolution Status */}
         <div className="mt-3 flex items-center justify-between text-xs">

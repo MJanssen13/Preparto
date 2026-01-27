@@ -5,8 +5,8 @@ import { patientService } from '../services/supabaseService';
 import { PatientStatus, ScheduledTask } from '../types';
 import { ArrowLeft, CalendarClock, Zap, Plus, Pill, Beaker, Check, Settings2, Trash2, Power, StopCircle } from 'lucide-react';
 
-// Added 'Sat' and 'TAX' to bring total to 10 items
-const PARAM_OPTIONS = ['BCF', 'PA', 'FC', 'Miso', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX'];
+// Added 'Dinâmica'
+const PARAM_OPTIONS = ['BCF', 'Dinâmica', 'PA', 'FC', 'Medicação', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX', 'DXT'];
 
 interface TimeSlot {
   time: Date;
@@ -36,26 +36,61 @@ const AdmissionForm: React.FC = () => {
   const [presetParam, setPresetParam] = useState<string>('BCF');
   const [presetInterval, setPresetInterval] = useState<number>(60);
 
-  // Initialize slots on mount (Start at 07:00, 12 hours initially)
+  // Initialize slots on mount
   useEffect(() => {
     generateInitialSlots();
   }, []);
 
   const generateInitialSlots = () => {
-    const slots: TimeSlot[] = [];
-    const start = new Date();
-    
-    // Set strictly to 07:00:00 of the current day
-    start.setHours(7, 0, 0, 0);
+    const now = new Date();
+    const start = new Date(now);
+    start.setSeconds(0, 0);
 
-    // Generate for 12 hours initially (48 slots of 15 mins)
-    for (let i = 0; i < 48; i++) {
-      const slotTime = new Date(start.getTime() + i * 15 * 60000);
-      slots.push({
-        time: slotTime,
-        selectedParams: []
-      });
+    // 1. Snap to previous hour or half-hour
+    // Ex: 08:12 -> 08:00 | 08:43 -> 08:30
+    const minutes = start.getMinutes();
+    if (minutes < 30) {
+      start.setMinutes(0);
+    } else {
+      start.setMinutes(30);
     }
+
+    // 2. Determine Shift End (07:00 or 19:00)
+    const currentHour = start.getHours();
+    let endTime = new Date(start);
+    endTime.setMinutes(0, 0, 0);
+
+    if (currentHour >= 7 && currentHour < 19) {
+      // Day Shift -> End at 19:00 today
+      endTime.setHours(19);
+    } else {
+      // Night Shift -> End at 07:00
+      if (currentHour >= 19) {
+         // It's late evening (e.g., 20:00), end is tomorrow 07:00
+         endTime.setDate(endTime.getDate() + 1);
+         endTime.setHours(7);
+      } else {
+         // It's early morning (e.g., 02:00), end is today 07:00
+         endTime.setHours(7);
+      }
+    }
+
+    // 3. Generate slots from start to endTime in 15min increments
+    const slots: TimeSlot[] = [];
+    let current = new Date(start);
+
+    // Safety loop to prevent infinite generation (limit to 24h just in case)
+    const maxSafety = new Date(start.getTime() + 24 * 60 * 60000);
+
+    while (current <= endTime && current < maxSafety) {
+       slots.push({
+         time: new Date(current),
+         selectedParams: []
+       });
+       // Add 15 minutes
+       current = new Date(current.getTime() + 15 * 60000);
+    }
+
     setTimeSlots(slots);
   };
 
@@ -68,7 +103,7 @@ const AdmissionForm: React.FC = () => {
     const startNext = new Date(lastSlot.time.getTime() + 15 * 60000);
     
     const newSlots: TimeSlot[] = [];
-    // Add 12 hours (48 slots)
+    // Add 12 hours (48 slots) - Standard next shift block
     for (let i = 0; i < 48; i++) {
         const slotTime = new Date(startNext.getTime() + i * 15 * 60000);
         newSlots.push({
@@ -462,7 +497,7 @@ const AdmissionForm: React.FC = () => {
                     </div>
                 )}
             </div>
-            <p className="text-[10px] text-slate-400 mt-2 text-center">Início às 07:00 (Máx 72h)</p>
+            <p className="text-[10px] text-slate-400 mt-2 text-center">Cronograma ajustado automaticamente ao plantão (07:00 / 19:00)</p>
         </div>
 
         <button

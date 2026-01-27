@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, Observation } from '../types';
-import { patientService } from '../services/supabaseService';
+import { patientService, get24hStats } from '../services/supabaseService';
 import { Search, Share2, Activity, Clock, Ruler, Check, ChevronDown, ChevronUp, Copy, Clipboard, FileText, Filter, BedDouble, AlertCircle, Maximize2, Minimize2, X, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { VitalCharts } from '../components/VitalCharts';
@@ -58,8 +58,13 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
             
             const toqueStr = formatToqueVaginal(o.obstetric);
             if (toqueStr) lineParts.push(toqueStr);
+            
+            if (o.vitals.dxt) lineParts.push(`DXT: ${o.vitals.dxt} MG/DL`);
 
-            if (o.medication?.misoprostolDose) lineParts.push(`MISOPROSTOL ${o.medication.misoprostolDose}MCG`);
+            if (o.medication?.misoprostolDose) {
+                const countStr = o.medication.misoprostolCount ? `${o.medication.misoprostolCount}º ` : '';
+                lineParts.push(`${countStr}MISO ${o.medication.misoprostolDose}MCG`);
+            }
             if (o.medication?.oxytocinDose) lineParts.push(`OCITOCINA ${o.medication.oxytocinDose} ML/H`);
 
             if (o.magnesiumData) {
@@ -185,7 +190,7 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                                                 </div>
                                             </td>
 
-                                            {/* Vitais (PA, Tax, Sat) */}
+                                            {/* Vitais (PA, Tax, Sat, DXT) */}
                                             <td className="p-3 align-top">
                                                 <div className="flex flex-col gap-0.5">
                                                     {obs.vitals.paSystolic && (
@@ -193,9 +198,10 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                                                             PA: {obs.vitals.paSystolic}x{obs.vitals.paDiastolic}
                                                         </span>
                                                     )}
-                                                    <div className="flex gap-2 text-[10px] text-slate-500">
+                                                    <div className="flex gap-2 text-[10px] text-slate-500 flex-wrap">
                                                         {obs.vitals.tax && <span>T: {obs.vitals.tax}°C</span>}
                                                         {obs.vitals.spo2 && <span>Sat: {obs.vitals.spo2}%</span>}
+                                                        {obs.vitals.dxt && <span>DXT: {obs.vitals.dxt}</span>}
                                                     </div>
                                                 </div>
                                             </td>
@@ -206,8 +212,12 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                                                     {/* Meds */}
                                                     {(obs.medication?.oxytocinDose || obs.medication?.misoprostolDose) && (
                                                         <div className="flex gap-1 flex-wrap">
-                                                            {obs.medication.oxytocinDose && <span className="text-[10px] bg-purple-50 text-purple-700 px-1 rounded border border-purple-100">Oxi: {obs.medication.oxytocinDose}</span>}
-                                                            {obs.medication.misoprostolDose && <span className="text-[10px] bg-purple-50 text-purple-700 px-1 rounded border border-purple-100">Miso: {obs.medication.misoprostolDose}</span>}
+                                                            {obs.medication.oxytocinDose && <span className="text-[10px] bg-purple-50 text-purple-700 px-1 rounded border border-purple-100">Oxi: {obs.medication.oxytocinDose}ml/h</span>}
+                                                            {obs.medication.misoprostolDose && (
+                                                                <span className="text-[10px] bg-purple-50 text-purple-700 px-1 rounded border border-purple-100">
+                                                                    {obs.medication.misoprostolCount ? `${obs.medication.misoprostolCount}º ` : ''}Miso: {obs.medication.misoprostolDose}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     )}
                                                     
@@ -396,6 +406,19 @@ const OverviewPage: React.FC = () => {
         {activePatients.length > 0 ? (
           activePatients.map(patient => {
             const lastObs = patient.lastObservation;
+            const stats = get24hStats(patient.observations);
+            const history = patient.observations || [];
+            
+            // --- LAST KNOWN VALUES LOGIC ---
+            const lastDilationObs = history.find(o => 
+                o.obstetric.dilation !== undefined || 
+                (o.obstetric.cervixStatus && o.obstetric.cervixStatus.length > 0)
+            );
+            const lastDynamicsObs = history.find(o => 
+                o.obstetric.dinamicaSummary || 
+                o.obstetric.dinamicaFrequency !== undefined
+            );
+
             const nextTask = getNextTask(patient);
             const isExpanded = expandedPatientId === patient.id;
             const isResolved = patient.status === PatientStatus.DISCHARGED || patient.status === PatientStatus.PARTOGRAM_OPENED;
@@ -450,21 +473,23 @@ const OverviewPage: React.FC = () => {
                 {!isExpanded && (
                    <div className="px-4 pb-4 grid grid-cols-3 gap-2 text-xs" onClick={() => toggleExpand(patient.id)}>
                       <div className="bg-rose-50 p-2 rounded border border-rose-100 flex flex-col items-center justify-center text-center">
-                         <span className="text-[10px] text-rose-400 font-bold uppercase mb-0.5">BCF</span>
+                         <span className="text-[10px] text-rose-400 font-bold uppercase mb-0.5">BCF (24h)</span>
                          <span className={`font-bold text-sm ${isBcfAbnormal ? 'text-red-600' : 'text-slate-700'}`}>
-                           {lastObs?.obstetric.bcf || '-'}
+                           {stats?.hasBcf ? stats.bcf : (lastObs?.obstetric.bcf || '-')}
                          </span>
                       </div>
                       <div className="bg-blue-50 p-2 rounded border border-blue-100 flex flex-col items-center justify-center text-center">
                          <span className="text-[10px] text-blue-400 font-bold uppercase mb-0.5">Dilat</span>
                          <span className="font-bold text-sm text-slate-700">
-                           {lastObs?.obstetric.dilation !== undefined ? `${lastObs.obstetric.dilation}cm` : '-'}
+                           {lastDilationObs 
+                             ? (lastDilationObs.obstetric.dilation !== undefined ? `${lastDilationObs.obstetric.dilation}cm` : (lastDilationObs.obstetric.cervixStatus?.join(' ')))
+                             : '-'}
                          </span>
                       </div>
                       <div className="bg-slate-50 p-2 rounded border border-slate-100 flex flex-col items-center justify-center text-center">
-                         <span className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">PA</span>
+                         <span className="text-[10px] text-slate-400 font-bold uppercase mb-0.5">PA (24h)</span>
                          <span className="font-bold text-sm text-slate-700">
-                           {lastObs?.vitals.paSystolic ? `${lastObs.vitals.paSystolic}x${lastObs.vitals.paDiastolic}` : '-'}
+                           {stats?.hasPa ? `${stats.pas} x ${stats.pad}` : (lastObs?.vitals.paSystolic ? `${lastObs.vitals.paSystolic}x${lastObs.vitals.paDiastolic}` : '-')}
                          </span>
                       </div>
                    </div>
@@ -517,8 +542,8 @@ const OverviewPage: React.FC = () => {
                         <th className="p-4 w-10"></th>
                         <th className="p-4 w-20 text-center">Leito</th>
                         <th className="p-4">Paciente / IG</th>
-                        <th className="p-4">Obstétrico (Último)</th>
-                        <th className="p-4">Vitas (Último)</th>
+                        <th className="p-4">Obstétrico (24h)</th>
+                        <th className="p-4">Vitas (24h)</th>
                         <th className="p-4">Status</th>
                         <th className="p-4 w-20"></th>
                     </tr>
@@ -527,6 +552,7 @@ const OverviewPage: React.FC = () => {
                     {activePatients.length > 0 ? (
                         activePatients.map(patient => {
                             const lastObs = patient.lastObservation;
+                            const stats = get24hStats(patient.observations);
                             const nextTask = getNextTask(patient);
                             const hasAlert = patient.riskFactors && patient.riskFactors.length > 0;
                             const isExpanded = expandedPatientId === patient.id;
@@ -535,6 +561,13 @@ const OverviewPage: React.FC = () => {
                             const isBcfAbnormal = lastObs?.obstetric.bcf !== undefined && (lastObs.obstetric.bcf < 110 || lastObs.obstetric.bcf > 160);
                             
                             const isResolved = patient.status === PatientStatus.DISCHARGED || patient.status === PatientStatus.PARTOGRAM_OPENED;
+
+                            const history = patient.observations || [];
+                            // --- LAST KNOWN VALUES LOGIC ---
+                            const lastDilationObs = history.find(o => 
+                                o.obstetric.dilation !== undefined || 
+                                (o.obstetric.cervixStatus && o.obstetric.cervixStatus.length > 0)
+                            );
 
                             return (
                                 <React.Fragment key={patient.id}>
@@ -577,24 +610,25 @@ const OverviewPage: React.FC = () => {
                                             </div>
                                         </td>
 
-                                        {/* Obstetric Stats */}
+                                        {/* Obstetric Stats (24h Range for BCF, Last for Dilation) */}
                                         <td className="p-4">
                                             {lastObs ? (
                                                 <div className="space-y-1.5">
                                                     <div className="flex items-center gap-2 text-sm">
                                                         <Ruler className="w-4 h-4 text-slate-400" />
                                                         <span className="font-bold text-slate-700">
-                                                            {lastObs.obstetric.dilation !== undefined ? `${lastObs.obstetric.dilation} cm` : 
-                                                             (lastObs.obstetric.cervixStatus && lastObs.obstetric.cervixStatus.length > 0 ? lastObs.obstetric.cervixStatus.join(',') : '-')}
+                                                            {lastDilationObs 
+                                                                ? (lastDilationObs.obstetric.dilation !== undefined ? `${lastDilationObs.obstetric.dilation} cm` : (lastDilationObs.obstetric.cervixStatus?.join(' ')))
+                                                                : '-'}
                                                         </span>
                                                         <span className="text-xs text-slate-400 ml-1">Dilatação</span>
                                                     </div>
                                                     <div className="flex items-center gap-2 text-sm">
                                                         <Activity className={`w-4 h-4 ${isBcfAbnormal ? 'text-red-500' : 'text-rose-400'}`} />
                                                         <span className={`font-bold ${isBcfAbnormal ? 'text-red-600' : 'text-slate-700'}`}>
-                                                            {lastObs.obstetric.bcf !== undefined ? lastObs.obstetric.bcf : '-'}
+                                                            {stats?.hasBcf ? stats.bcf : (lastObs.obstetric.bcf || '-')}
                                                         </span>
-                                                        <span className="text-xs text-slate-400 ml-1">bpm</span>
+                                                        <span className="text-xs text-slate-400 ml-1">bpm (24h)</span>
                                                     </div>
                                                 </div>
                                             ) : (
@@ -602,7 +636,7 @@ const OverviewPage: React.FC = () => {
                                             )}
                                         </td>
 
-                                        {/* Vitals Stats */}
+                                        {/* Vitals Stats (24h Ranges) */}
                                         <td className="p-4">
                                             {lastObs ? (
                                                 <div className="space-y-1.5">
@@ -610,9 +644,9 @@ const OverviewPage: React.FC = () => {
                                                     <div className="flex items-center gap-2 text-sm">
                                                         <Activity className="w-4 h-4 text-indigo-400" />
                                                         <span className="font-bold text-slate-700">
-                                                            {lastObs.vitals.paSystolic !== undefined ? `${lastObs.vitals.paSystolic}x${lastObs.vitals.paDiastolic}` : '-'}
+                                                            {stats?.hasPa ? `${stats.pas} x ${stats.pad}` : (lastObs.vitals.paSystolic !== undefined ? `${lastObs.vitals.paSystolic}x${lastObs.vitals.paDiastolic}` : '-')}
                                                         </span>
-                                                        <span className="text-xs text-slate-400 ml-1">mmHg</span>
+                                                        <span className="text-xs text-slate-400 ml-1">mmHg (24h)</span>
                                                     </div>
                                                     
                                                     {/* MgSO4 Data (if applicable) */}

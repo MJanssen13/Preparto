@@ -3,16 +3,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { MembraneStatus, Patient, ScheduledTask } from '../types';
-import { ArrowLeft, Save, Clock, Trash2, Plus, AlertCircle, X, SlidersHorizontal, ArrowDownUp, CircleDot, Activity, Play, Square, Timer, RotateCcw, Hammer, Droplets, Wind, Waves, Calculator, Calendar, Edit3 } from 'lucide-react';
+import { ArrowLeft, Save, Clock, Trash2, Plus, AlertCircle, X, SlidersHorizontal, ArrowDownUp, CircleDot, Activity, Play, Square, Timer, RotateCcw, Hammer, Droplets, Wind, Waves, Calculator, Calendar, Edit3, Droplet } from 'lucide-react';
 
 const ALL_PARAMS = [
   { id: 'BCF', label: 'BCF', section: 'obstetric' },
   { id: 'Dinâmica', label: 'Dinâmica', section: 'obstetric' },
   { id: 'Toque', label: 'Toque', section: 'obstetric' },
   { id: 'PA', label: 'Pressão Arterial', section: 'vitals' },
+  { id: 'FC', label: 'Frequência Cardíaca', section: 'vitals' },
   { id: 'TAX', label: 'Temperatura', section: 'vitals' },
   { id: 'Sat', label: 'Saturação', section: 'vitals' },
-  { id: 'Meds', label: 'Medicação', section: 'meds' },
+  { id: 'DXT', label: 'Glicemia (DXT)', section: 'vitals' },
+  // Changed id from 'Meds' to 'Medicação' to match Admission
+  { id: 'Medicação', label: 'Medicação', section: 'meds' },
   { id: 'Reflexo', label: 'Reflexo', section: 'mag' },
   { id: 'Diurese', label: 'Diurese', section: 'mag' },
   { id: 'FR', label: 'Freq. Resp.', section: 'mag' }
@@ -45,9 +48,12 @@ const ObservationForm: React.FC = () => {
     paDia: '',
     paSysStanding: '',
     paDiaStanding: '',
+    fc: '',
     tax: '',
     spo2: '',
+    dxt: '', // NEW: Glicemia
     miso: '',
+    misoCount: '', // NEW: To store "1º", "2º", etc.
     oxy: '',
     magReflex: 'Presente',
     magDiuresis: '',
@@ -224,9 +230,12 @@ const ObservationForm: React.FC = () => {
                        paDia: obs.vitals.paDiastolic !== undefined ? String(obs.vitals.paDiastolic) : '',
                        paSysStanding: obs.vitals.paStandingSystolic ? String(obs.vitals.paStandingSystolic) : '',
                        paDiaStanding: obs.vitals.paStandingDiastolic ? String(obs.vitals.paStandingDiastolic) : '',
+                       fc: obs.vitals.fc ? String(obs.vitals.fc) : '',
                        tax: obs.vitals.tax !== undefined ? String(obs.vitals.tax) : '',
                        spo2: obs.vitals.spo2 ? String(obs.vitals.spo2) : '',
+                       dxt: obs.vitals.dxt ? String(obs.vitals.dxt) : '',
                        miso: obs.medication?.misoprostolDose ? String(obs.medication.misoprostolDose) : '',
+                       misoCount: obs.medication?.misoprostolCount ? String(obs.medication.misoprostolCount) : '',
                        oxy: obs.medication?.oxytocinDose ? String(obs.medication.oxytocinDose) : '',
                        magReflex: obs.magnesiumData?.reflex || 'Presente',
                        magDiuresis: obs.magnesiumData?.diuresis || '',
@@ -237,9 +246,12 @@ const ObservationForm: React.FC = () => {
                    if (obs.obstetric.dinamicaFrequency !== undefined || obs.obstetric.dinamicaSummary) paramsToActivate.push('Dinâmica');
                    if (obs.obstetric.dilation !== undefined) paramsToActivate.push('Toque');
                    if (obs.vitals.paSystolic !== undefined) paramsToActivate.push('PA');
+                   if (obs.vitals.fc) paramsToActivate.push('FC');
                    if (obs.vitals.tax !== undefined) paramsToActivate.push('TAX');
                    if (obs.vitals.spo2) paramsToActivate.push('Sat');
-                   if (obs.medication?.misoprostolDose || obs.medication?.oxytocinDose) paramsToActivate.push('Meds');
+                   if (obs.vitals.dxt) paramsToActivate.push('DXT');
+                   // Use 'Medicação' instead of 'Meds'
+                   if (obs.medication?.misoprostolDose || obs.medication?.oxytocinDose) paramsToActivate.push('Medicação');
                    if (obs.magnesiumData) paramsToActivate.push('Reflexo', 'Diurese', 'FR');
                    setActiveParams(paramsToActivate);
                }
@@ -294,8 +306,10 @@ const ObservationForm: React.FC = () => {
         timestamp: finalDateObj.toISOString(),
         examinerName: 'Dr. Demo', 
         vitals: {
+          fc: activeParams.includes('FC') ? numOrUndef(formData.fc) : undefined,
           tax: activeParams.includes('TAX') ? numOrUndef(formData.tax) : undefined,
           spo2: activeParams.includes('Sat') ? numOrUndef(formData.spo2) : undefined,
+          dxt: activeParams.includes('DXT') ? numOrUndef(formData.dxt) : undefined,
           paSystolic: activeParams.includes('PA') ? numOrUndef(formData.paSys) : undefined,
           paDiastolic: activeParams.includes('PA') ? numOrUndef(formData.paDia) : undefined,
           paPosition: 'sitting' as const,
@@ -318,8 +332,10 @@ const ObservationForm: React.FC = () => {
           bloodOnGlove: activeParams.includes('Toque') ? formData.bloodOnGlove : undefined
         },
         medication: {
-          misoprostolDose: activeParams.includes('Meds') ? numOrUndef(formData.miso) : undefined,
-          oxytocinDose: activeParams.includes('Meds') ? numOrUndef(formData.oxy) : undefined,
+          // Changed check from 'Meds' to 'Medicação'
+          misoprostolDose: activeParams.includes('Medicação') ? numOrUndef(formData.miso) : undefined,
+          misoprostolCount: activeParams.includes('Medicação') ? numOrUndef(formData.misoCount) : undefined,
+          oxytocinDose: activeParams.includes('Medicação') ? numOrUndef(formData.oxy) : undefined,
         },
         magnesiumData: isMgActive ? {
             reflex: formData.magReflex as any,
@@ -389,7 +405,7 @@ const ObservationForm: React.FC = () => {
         </div>
 
         {/* Vitals Group */}
-        {(activeParams.includes('PA') || activeParams.includes('TAX') || activeParams.includes('Sat')) && (
+        {(activeParams.includes('PA') || activeParams.includes('FC') || activeParams.includes('TAX') || activeParams.includes('Sat') || activeParams.includes('DXT')) && (
             <section className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 border-b pb-2">Sinais Vitais</h3>
                 <div className="space-y-4">
@@ -402,6 +418,12 @@ const ObservationForm: React.FC = () => {
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
+                        {activeParams.includes('FC') && (
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 mb-1">Frequência Cardíaca (bpm)</label>
+                                <input name="fc" type="number" placeholder="80" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.fc} onChange={handleChange} />
+                            </div>
+                        )}
                         {activeParams.includes('TAX') && (
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Temperatura</label>
@@ -412,6 +434,12 @@ const ObservationForm: React.FC = () => {
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Saturação (%)</label>
                                 <input name="spo2" type="number" placeholder="98" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.spo2} onChange={handleChange} />
+                            </div>
+                        )}
+                        {activeParams.includes('DXT') && (
+                            <div>
+                                <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center gap-1"><Droplet className="w-3 h-3" /> Glicemia (mg/dL)</label>
+                                <input name="dxt" type="number" placeholder="98" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.dxt} onChange={handleChange} />
                             </div>
                         )}
                     </div>
@@ -655,23 +683,38 @@ const ObservationForm: React.FC = () => {
         )}
 
         {/* Medications */}
-        {activeParams.includes('Meds') && (
+        {/* Updated from 'Meds' to 'Medicação' */}
+        {activeParams.includes('Medicação') && (
             <section className="bg-purple-50 p-5 rounded-xl border border-purple-100 shadow-sm">
                 <h3 className="text-sm font-bold text-purple-900 uppercase tracking-wide mb-4 border-b border-purple-200 pb-2">Medicação / Indução</h3>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-xs font-medium text-purple-800 mb-1">Ocitocina (mU/min)</label>
+                        <label className="block text-xs font-medium text-purple-800 mb-1">Ocitocina (ml/h)</label>
                         <input name="oxy" type="number" placeholder="0" className="w-full p-3 border border-purple-200 rounded-lg bg-white" value={formData.oxy} onChange={handleChange} />
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-purple-800 mb-1">Misoprostol (mcg)</label>
-                         <select name="miso" className="w-full p-3 border border-purple-200 rounded-lg bg-white" value={formData.miso} onChange={handleChange}>
-                            <option value="">-</option>
-                            <option value="25">25 mcg</option>
-                            <option value="50">50 mcg</option>
-                            <option value="100">100 mcg</option>
-                            <option value="200">200 mcg</option>
-                        </select>
+                        <label className="block text-xs font-medium text-purple-800 mb-1">Misoprostol</label>
+                        <div className="flex gap-2">
+                            <div className="w-16 relative">
+                                <input 
+                                    name="misoCount"
+                                    type="number" 
+                                    placeholder="Nº" 
+                                    className="w-full p-3 border border-purple-200 rounded-lg bg-white text-center" 
+                                    value={formData.misoCount} 
+                                    onChange={handleChange}
+                                />
+                                <span className="absolute right-1 top-1 text-[9px] text-purple-400 font-bold">o</span>
+                            </div>
+                            <select name="miso" className="flex-1 p-3 border border-purple-200 rounded-lg bg-white" value={formData.miso} onChange={handleChange}>
+                                <option value="">Dose</option>
+                                <option value="25">25 mcg</option>
+                                <option value="50">50 mcg</option>
+                                <option value="100">100 mcg</option>
+                                <option value="200">200 mcg</option>
+                            </select>
+                        </div>
+                        <p className="text-[9px] text-purple-600 mt-1">Ex: 2º Miso 25mcg</p>
                     </div>
                 </div>
             </section>

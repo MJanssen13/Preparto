@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -40,9 +40,9 @@ const PatientDetails: React.FC = () => {
           await patientService.resolvePatient(id, PatientStatus.DISCHARGED);
           // Reload local data to reflect changes immediately
           loadData(id);
-      } catch (error) {
+      } catch (error: any) {
           console.error("Erro ao resolver paciente:", error);
-          alert("Erro ao atualizar status.");
+          alert(`Erro ao atualizar status: ${error.message || 'Erro desconhecido'}. Verifique o console para mais detalhes.`);
       }
   };
 
@@ -324,6 +324,12 @@ const PatientDetails: React.FC = () => {
                                 <span>Sat: {obs.vitals.spo2}%</span>
                               </div>
                             )}
+                            {obs.vitals.dxt !== undefined && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <Droplet className="w-4 h-4 text-slate-400" />
+                                <span>DXT: <b>{obs.vitals.dxt}</b> mg/dL</span>
+                              </div>
+                            )}
                         </div>
                       </div>
                     </div>
@@ -377,8 +383,12 @@ const PatientDetails: React.FC = () => {
                      {obs.medication && (obs.medication.misoprostolDose !== undefined || obs.medication.oxytocinDose !== undefined) && (
                        <div className="col-span-2 bg-purple-50 p-2 rounded-lg text-xs text-purple-800 flex flex-wrap gap-3 mt-1">
                           <Pill className="w-3 h-3" />
-                          {obs.medication.misoprostolDose !== undefined && <span>Miso: <b>{obs.medication.misoprostolDose}mcg</b></span>}
-                          {obs.medication.oxytocinDose !== undefined && <span>Ocitocina: <b>{obs.medication.oxytocinDose}mU</b></span>}
+                          {obs.medication.misoprostolDose !== undefined && (
+                             <span>
+                                 {obs.medication.misoprostolCount ? `${obs.medication.misoprostolCount}º ` : ''}Miso: <b>{obs.medication.misoprostolDose}mcg</b>
+                             </span>
+                          )}
+                          {obs.medication.oxytocinDose !== undefined && <span>Ocitocina: <b>{obs.medication.oxytocinDose}ml/h</b></span>}
                        </div>
                      )}
                      

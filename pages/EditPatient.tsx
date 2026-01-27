@@ -5,7 +5,8 @@ import { patientService } from '../services/supabaseService';
 import { Patient, PatientStatus, ScheduledTask } from '../types';
 import { ArrowLeft, Pill, Beaker, Save, Trash2, AlertTriangle, Lock, CalendarClock, Plus, X, Power, Check, StopCircle } from 'lucide-react';
 
-const PARAM_OPTIONS = ['BCF', 'PA', 'FC', 'Miso', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX'];
+// Added 'Dinâmica'
+const PARAM_OPTIONS = ['BCF', 'Dinâmica', 'PA', 'FC', 'Medicação', 'Toque', 'Reflexo', 'Diurese', 'FR', 'Sat', 'TAX', 'DXT'];
 
 const EditPatient: React.FC = () => {
   const { id } = useParams<{ id: string }>();

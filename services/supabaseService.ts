@@ -57,7 +57,7 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     ...(p.magnesiumSulfateEndTime !== undefined && { magnesium_sulfate_end_time: p.magnesiumSulfateEndTime }),
 
     ...(p.dischargeTime && { discharge_time: p.dischargeTime }),
-    // Check explicitly for array to allow sending empty arrays
+    // Check explicitly for array to allow sending empty arrays (important for clearing schedule)
     ...(Array.isArray(p.schedule) && { schedule: p.schedule }),
     ...(p.lastObservation && { last_observation: p.lastObservation })
   };
@@ -88,7 +88,9 @@ const mapPatientFromDB = (db: any): Patient => {
 
     dischargeTime: db.discharge_time,
     schedule: db.schedule || [],
-    lastObservation: db.last_observation
+    lastObservation: db.last_observation,
+    // Map joined observations if they exist
+    observations: db.observations ? db.observations.map(mapObservationFromDB) : undefined
   };
 };
 
@@ -96,9 +98,22 @@ const mapObservationToDB = (o: Partial<Observation>) => {
     return {
         ...(o.patientId && { patient_id: o.patientId }),
         ...(o.timestamp && { timestamp: o.timestamp }),
-        ...(o.vitals && { vitals: o.vitals }),
+        ...(o.vitals && { 
+            vitals: {
+                ...o.vitals,
+                dxt: o.vitals?.dxt // Ensure dxt is passed
+            }
+        }),
         ...(o.obstetric && { obstetric: o.obstetric }),
-        ...(o.medication && { medication: o.medication }),
+        
+        // Handle nested medication object manually to include misoprostol_count
+        ...(o.medication && { 
+            medication: {
+                ...o.medication,
+                misoprostolCount: o.medication.misoprostolCount
+            } 
+        }),
+        
         ...(o.magnesiumData && { magnesium_data: o.magnesiumData }),
         ...(o.examinerName && { examiner_name: o.examinerName }),
         ...(o.notes && { notes: o.notes }),
@@ -119,14 +134,59 @@ const mapObservationFromDB = (db: any): Observation => {
     }
 }
 
+// --- HELPER PARA MÍNIMO E MÁXIMO ---
+export const get24hStats = (observations: Observation[] | undefined) => {
+    if (!observations || observations.length === 0) return null;
+
+    const now = new Date().getTime();
+    const cutoff = now - (24 * 60 * 60 * 1000);
+    
+    // Filter last 24h
+    const recent = observations.filter(o => new Date(o.timestamp).getTime() > cutoff);
+    if (recent.length === 0) return null;
+
+    const formatRange = (values: number[]) => {
+        if (values.length === 0) return '-';
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        if (min === max) return `${min}`;
+        return `${min}-${max}`;
+    };
+
+    const bcfValues = recent.map(o => o.obstetric.bcf).filter((v): v is number => v !== undefined);
+    const pasValues = recent.map(o => o.vitals.paSystolic).filter((v): v is number => v !== undefined);
+    const padValues = recent.map(o => o.vitals.paDiastolic).filter((v): v is number => v !== undefined);
+
+    return {
+        bcf: formatRange(bcfValues),
+        pas: formatRange(pasValues),
+        pad: formatRange(padValues),
+        count: recent.length,
+        hasBcf: bcfValues.length > 0,
+        hasPa: pasValues.length > 0
+    };
+};
+
 export const patientService = {
   async getPatients(): Promise<Patient[]> {
     if (!supabase) {
+        // LOCAL STORAGE
         const data = localStorage.getItem(STORAGE_KEY_PATIENTS);
+        const obsData = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
+        
         let patients: Patient[] = data ? JSON.parse(data) : [];
+        const allObs: Observation[] = obsData ? JSON.parse(obsData) : [];
+
+        // Attach observations manually for LocalStorage flow
+        patients = patients.map(p => ({
+            ...p,
+            observations: allObs
+                .filter(o => o.patientId === p.id)
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        }));
+
         patients = patients.filter(p => !isPatientExpired(p));
         return patients.sort((a, b) => {
-            // Sort resolved patients to the bottom
             const aResolved = a.status === PatientStatus.DISCHARGED || a.status === PatientStatus.PARTOGRAM_OPENED;
             const bResolved = b.status === PatientStatus.DISCHARGED || b.status === PatientStatus.PARTOGRAM_OPENED;
             
@@ -136,9 +196,24 @@ export const patientService = {
             return a.bed.localeCompare(b.bed, undefined, { numeric: true });
         });
     }
-    const { data, error } = await supabase.from('patients').select('*').order('bed', { ascending: true });
+
+    // SUPABASE: Join observations
+    const { data, error } = await supabase
+        .from('patients')
+        .select('*, observations(*)')
+        .order('bed', { ascending: true });
+        
     if (error) return [];
-    const patients = data.map(mapPatientFromDB);
+    
+    // Map and Sort observations descending for each patient
+    const patients = data.map(dbPatient => {
+        const p = mapPatientFromDB(dbPatient);
+        if (p.observations) {
+            p.observations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        }
+        return p;
+    });
+
     return patients.filter(p => !isPatientExpired(p));
   },
 
@@ -147,9 +222,13 @@ export const patientService = {
         const patients = await this.getPatients();
         return patients.find(p => p.id === id);
     }
-    const { data, error } = await supabase.from('patients').select('*').eq('id', id).single();
+    const { data, error } = await supabase.from('patients').select('*, observations(*)').eq('id', id).single();
     if (error || !data) return undefined;
-    return mapPatientFromDB(data);
+    const p = mapPatientFromDB(data);
+    if (p.observations) {
+        p.observations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    }
+    return p;
   },
 
   async createPatient(patientData: Omit<Patient, 'id' | 'lastObservation'>): Promise<Patient> {
@@ -157,7 +236,9 @@ export const patientService = {
         const patients = await this.getPatients();
         const newPatient: Patient = { ...patientData, id: crypto.randomUUID() };
         patients.push(newPatient);
-        localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(patients));
+        // Clean observations before saving to storage to prevent duplication (re-attach on read)
+        const storagePatients = patients.map(({ observations, ...rest }) => rest);
+        localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(storagePatients));
         return newPatient;
     }
     const dbPayload = mapPatientToDB(patientData);
@@ -172,12 +253,16 @@ export const patientService = {
         const index = patients.findIndex(p => p.id === id);
         if (index === -1) return null;
         patients[index] = { ...patients[index], ...updates };
-        localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(patients));
+        
+        // Clean observations before saving
+        const storagePatients = patients.map(({ observations, ...rest }) => rest);
+        localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(storagePatients));
         return patients[index];
     }
     const dbPayload = mapPatientToDB(updates);
     const { data, error } = await supabase.from('patients').update(dbPayload).eq('id', id).select().single();
     if (error) {
+        // --- LOGGING THE SUPABASE ERROR FOR DEBUGGING ---
         console.error("Supabase update error:", error);
         return null;
     }
@@ -195,6 +280,8 @@ export const patientService = {
           task.status !== 'pending'
       );
 
+      console.log('Resolving patient:', id, 'New Schedule:', updatedSchedule);
+
       // 3. Update DB
       const result = await this.updatePatient(id, {
           status: newStatus,
@@ -202,7 +289,7 @@ export const patientService = {
           schedule: updatedSchedule
       });
 
-      if (!result) throw new Error('Failed to resolve patient');
+      if (!result) throw new Error('Failed to resolve patient (Database update failed)');
   },
 
   async deletePatient(id: string): Promise<void> {
@@ -292,6 +379,9 @@ export const patientService = {
                     t.id === scheduledTaskId ? { ...t, status: 'completed' } : t
                 );
             }
+            // Ensure we don't save the observations array to localStorage inside patients
+            const { observations, ...rest } = patients[patientIndex];
+            patients[patientIndex] = rest as Patient; 
             localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(patients));
         }
         return newObs;
@@ -302,13 +392,17 @@ export const patientService = {
     if (error) throw error;
     const newObs = mapObservationFromDB(data);
     
+    // ALWAYS update the patient's lastObservation field to ensure freshness
+    // This allows the cards to show the latest check immediately
+    await this.updatePatient(newObs.patientId, { lastObservation: newObs });
+
     if (scheduledTaskId) {
         const patient = await this.getPatientById(newObs.patientId);
         if (patient) {
             const updatedSchedule = patient.schedule.map(task => 
                 task.id === scheduledTaskId ? { ...task, status: 'completed' as const } : task
             );
-            await this.updatePatient(patient.id, { schedule: updatedSchedule, lastObservation: newObs });
+            await this.updatePatient(patient.id, { schedule: updatedSchedule });
         }
     }
     return newObs;
