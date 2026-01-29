@@ -442,6 +442,64 @@ export const patientService = {
       return mapObservationFromDB(data);
   },
 
+  async deleteObservation(id: string): Promise<void> {
+    // 1. Get the observation first to know the patient_id
+    const obsToDelete = await this.getObservationById(id);
+    if (!obsToDelete) return;
+
+    const patientId = obsToDelete.patientId;
+
+    if (!supabase) {
+        // Local Storage
+        const data = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
+        const allObs: Observation[] = data ? JSON.parse(data) : [];
+        const newObs = allObs.filter(o => o.id !== id);
+        localStorage.setItem(STORAGE_KEY_OBSERVATIONS, JSON.stringify(newObs));
+        
+        // Update Patient's lastObservation in LS
+        const patientObs = newObs
+            .filter(o => o.patientId === patientId)
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        
+        const newLastObs = patientObs.length > 0 ? patientObs[0] : undefined;
+        
+        const pData = localStorage.getItem(STORAGE_KEY_PATIENTS);
+        const patients: Patient[] = pData ? JSON.parse(pData) : [];
+        const pIndex = patients.findIndex(p => p.id === patientId);
+        
+        if (pIndex >= 0) {
+            patients[pIndex].lastObservation = newLastObs;
+            // Also need to clean up nested observations if they are stored there (they shouldn't be persisted there in this model but good to check)
+            localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(patients));
+        }
+        return;
+    }
+
+    // Supabase
+    await supabase.from('observations').delete().eq('id', id);
+
+    // Update patient's last_observation. 
+    // We need to fetch the *new* latest one.
+    const { data: newLatestData } = await supabase
+        .from('observations')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('timestamp', { ascending: false })
+        .limit(1);
+
+    let newLastObs = null;
+    if (newLatestData && newLatestData.length > 0) {
+        newLastObs = mapObservationFromDB(newLatestData[0]);
+    }
+
+    // Convert back to DB format for the column
+    // The column in DB expects JSONB of the observation.
+    const lastObsPayload = newLastObs ? mapObservationToDB(newLastObs) : null;
+
+    // Supabase update might accept the mapped object if the column is JSONB
+    await supabase.from('patients').update({ last_observation: lastObsPayload }).eq('id', patientId);
+  },
+
   async updateObservation(id: string, updates: Partial<Observation>): Promise<Observation | null> {
       if (!supabase) {
           const data = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
@@ -521,5 +579,46 @@ export const patientService = {
       const dbPayload = mapCTGToDB(ctg);
       const { error } = await supabase.from('ctgs').insert(dbPayload);
       if (error) throw error;
+  },
+
+  async getCTGById(id: string): Promise<CTG | undefined> {
+    if (!supabase) {
+        const data = localStorage.getItem(STORAGE_KEY_CTGS);
+        const allCtgs: CTG[] = data ? JSON.parse(data) : [];
+        return allCtgs.find(c => c.id === id);
+    }
+    const { data, error } = await supabase.from('ctgs').select('*').eq('id', id).single();
+    if (error || !data) return undefined;
+    return mapCTGFromDB(data);
+  },
+
+  async updateCTG(id: string, updates: Partial<CTG>): Promise<void> {
+      if (!supabase) {
+          const data = localStorage.getItem(STORAGE_KEY_CTGS);
+          const allCtgs: CTG[] = data ? JSON.parse(data) : [];
+          const index = allCtgs.findIndex(c => c.id === id);
+          if (index !== -1) {
+              allCtgs[index] = { ...allCtgs[index], ...updates };
+              localStorage.setItem(STORAGE_KEY_CTGS, JSON.stringify(allCtgs));
+          }
+          return;
+      }
+      
+      const dbPayload = mapCTGToDB(updates);
+      const { error } = await supabase.from('ctgs').update(dbPayload).eq('id', id);
+      if (error) throw error;
+  },
+
+  async deleteCTG(id: string): Promise<void> {
+    if (!supabase) {
+        const data = localStorage.getItem(STORAGE_KEY_CTGS);
+        const allCtgs: CTG[] = data ? JSON.parse(data) : [];
+        const newCtgs = allCtgs.filter(c => c.id !== id);
+        localStorage.setItem(STORAGE_KEY_CTGS, JSON.stringify(newCtgs));
+        return;
+    }
+
+    const { error } = await supabase.from('ctgs').delete().eq('id', id);
+    if (error) throw error;
   }
 };

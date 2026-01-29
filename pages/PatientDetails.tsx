@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Patient, Observation, PatientStatus } from '../types';
+import { Patient, Observation, PatientStatus, CTG } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, CalendarClock, HeartPulse } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -11,6 +11,7 @@ const PatientDetails: React.FC = () => {
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | undefined>(undefined);
   const [observations, setObservations] = useState<Observation[]>([]);
+  const [ctgs, setCtgs] = useState<CTG[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Resolution Modal State
@@ -32,12 +33,12 @@ const PatientDetails: React.FC = () => {
 
   const loadData = async (patientId: string) => {
     setLoading(true);
-    const [p, obs] = await Promise.all([
-      patientService.getPatientById(patientId),
-      patientService.getObservations(patientId)
-    ]);
-    setPatient(p);
-    setObservations(obs);
+    const p = await patientService.getPatientById(patientId);
+    if (p) {
+        setPatient(p);
+        setObservations(p.observations || []);
+        setCtgs(p.ctgs || []);
+    }
     setLoading(false);
   };
 
@@ -160,6 +161,12 @@ const PatientDetails: React.FC = () => {
   const pendingTasks = (patient.schedule || [])
     .filter(t => t.status === 'pending')
     .sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // Merge and Sort Timeline Items (Observations + CTGs)
+  const timelineItems = [
+      ...observations.map(o => ({ type: 'obs', data: o, time: new Date(o.timestamp).getTime() })),
+      ...ctgs.map(c => ({ type: 'ctg', data: c, time: new Date(c.timestamp).getTime() }))
+  ].sort((a, b) => b.time - a.time);
 
   return (
     <div className="space-y-6 pb-20 relative">
@@ -408,12 +415,80 @@ const PatientDetails: React.FC = () => {
       {/* Timeline Feed */}
       <div className="space-y-4">
         <h3 className="font-bold text-slate-700 px-1">Evolução Clínica</h3>
-        {observations.length === 0 ? (
+        {timelineItems.length === 0 ? (
           <div className="text-center py-8 text-slate-400 bg-white rounded-xl">
             Nenhuma observação registrada.
           </div>
         ) : (
-          observations.map((obs) => {
+          timelineItems.map((item, idx) => {
+             // RENDER CTG CARD
+             if (item.type === 'ctg') {
+                 const ctg = item.data as CTG;
+                 return (
+                    <div key={`ctg-${ctg.id}`} className="bg-pink-50 rounded-xl border border-pink-100 shadow-sm p-4 relative group animate-in fade-in">
+                         <div className="absolute top-4 right-4 flex items-center gap-3">
+                             <span className="text-xl font-bold text-pink-700 tracking-tight">
+                                 {new Date(ctg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                             </span>
+                             <Link 
+                                to={`/patient/${id}/edit-ctg/${ctg.id}`}
+                                className="p-1.5 text-pink-300 hover:text-pink-600 hover:bg-pink-100 rounded-full transition-colors"
+                             >
+                                 <Edit2 className="w-4 h-4" />
+                             </Link>
+                         </div>
+                         
+                         <div className="flex items-center gap-2 mb-3">
+                             <div className="bg-pink-100 p-1.5 rounded-lg">
+                                <HeartPulse className="w-4 h-4 text-pink-600" />
+                             </div>
+                             <span className="text-xs font-bold uppercase text-pink-700">Cardiotocografia</span>
+                         </div>
+                         
+                         <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm">
+                             <div className="flex flex-col">
+                                 <span className="text-[10px] text-pink-400 uppercase">Linha de Base</span>
+                                 <span className="font-bold text-pink-900">{ctg.baseline} bpm</span>
+                             </div>
+                             <div className="flex flex-col">
+                                 <span className="text-[10px] text-pink-400 uppercase">Variabilidade</span>
+                                 <span className="font-bold text-pink-900">{ctg.variability}</span>
+                             </div>
+                             <div className="flex flex-col">
+                                 <span className="text-[10px] text-pink-400 uppercase">Desacelerações</span>
+                                 <span className={`font-bold ${ctg.decelerations === 'Presentes' ? 'text-red-500' : 'text-pink-900'}`}>
+                                     {ctg.decelerations} 
+                                     {ctg.decelerations === 'Presentes' && ctg.decelerationDetails && (
+                                         <span className="text-xs font-normal text-red-400 block">
+                                             ({ctg.decelerationDetails.count}x {ctg.decelerationDetails.type})
+                                         </span>
+                                     )}
+                                 </span>
+                             </div>
+                             <div className="flex flex-col">
+                                 <span className="text-[10px] text-pink-400 uppercase">Pontuação</span>
+                                 <span className="font-bold text-pink-900">{ctg.score}/5</span>
+                             </div>
+                             
+                             <div className="col-span-2 pt-2 border-t border-pink-100">
+                                 <span className="text-[10px] text-pink-400 uppercase block mb-1">Conclusão</span>
+                                 <span className="font-bold text-pink-800 bg-white/50 px-2 py-1 rounded block w-fit">
+                                     {ctg.conclusion}
+                                 </span>
+                             </div>
+                             
+                             {ctg.notes && (
+                                <div className="col-span-2 text-xs text-pink-600 italic mt-1">
+                                    "{ctg.notes}"
+                                </div>
+                             )}
+                         </div>
+                    </div>
+                 );
+             }
+
+             // RENDER OBSERVATION CARD
+             const obs = item.data as Observation;
              const isBcfAbnormal = obs.obstetric.bcf !== undefined && (obs.obstetric.bcf < 110 || obs.obstetric.bcf > 160);
              const toqueString = formatToqueVaginal(obs.obstetric);
 
@@ -425,7 +500,7 @@ const PatientDetails: React.FC = () => {
              );
 
              return (
-              <div key={obs.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 relative group">
+              <div key={`obs-${obs.id}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 relative group">
                  <div className="absolute top-4 right-4 flex items-center gap-3">
                    <span className="text-xl font-bold text-slate-700 tracking-tight">
                      {new Date(obs.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

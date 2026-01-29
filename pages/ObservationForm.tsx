@@ -360,6 +360,21 @@ const ObservationForm: React.FC = () => {
       alert('Erro ao salvar.');
     } finally { setIsSubmitting(false); }
   };
+  
+  const handleDelete = async () => {
+      if (!obsId || !id) return;
+      if (confirm("Tem certeza que deseja excluir esta evolução? Esta ação não pode ser desfeita.")) {
+          setIsSubmitting(true);
+          try {
+              await patientService.deleteObservation(obsId);
+              navigate(`/patient/${id}`);
+          } catch (error) {
+              console.error(error);
+              alert("Erro ao excluir.");
+              setIsSubmitting(false);
+          }
+      }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   const handleSelection = (name: string, value: string) => setFormData(prev => ({ ...prev, [name]: value }));
@@ -385,6 +400,17 @@ const ObservationForm: React.FC = () => {
                 <p className="text-xs text-slate-500">{patient.name} - Leito {patient.bed}</p>
             </div>
         </div>
+        
+        {obsId && (
+            <button 
+                type="button" 
+                onClick={handleDelete}
+                className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                title="Excluir Evolução"
+            >
+                <Trash2 className="w-5 h-5" />
+            </button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">

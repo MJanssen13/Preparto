@@ -25,6 +25,7 @@ const App: React.FC = () => {
           <Route path="/patient/:id/add-observation" element={<ObservationForm />} />
           <Route path="/patient/:id/edit-observation/:obsId" element={<ObservationForm />} />
           <Route path="/patient/:id/ctg" element={<CTGForm />} />
+          <Route path="/patient/:id/edit-ctg/:ctgId" element={<CTGForm />} />
         </Routes>
       </Layout>
     </Router>

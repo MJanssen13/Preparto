@@ -3,10 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { Patient, CTG } from '../types';
-import { ArrowLeft, Activity, Save, Calculator, AlertCircle, Info } from 'lucide-react';
+import { ArrowLeft, Activity, Save, Calculator, AlertCircle, Info, Trash2 } from 'lucide-react';
 
 const CTGForm: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, ctgId } = useParams<{ id: string, ctgId?: string }>();
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,6 +40,41 @@ const CTGForm: React.FC = () => {
     }
   }, [id]);
 
+  // Load existing CTG data if in edit mode
+  useEffect(() => {
+    if (ctgId) {
+        patientService.getCTGById(ctgId).then(ctg => {
+            if (ctg) {
+                const d = new Date(ctg.timestamp);
+                // Adjust date string for input type="date" and "time"
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                
+                setDate(`${y}-${m}-${day}`);
+                setTime(d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+
+                setFormData({
+                    baseline: String(ctg.baseline),
+                    variability: ctg.variability,
+                    accelerations: ctg.accelerations,
+                    atMfRatio: ctg.atMfRatio,
+                    movements: ctg.movements,
+                    decelerations: ctg.decelerations,
+                    decelerationType: ctg.decelerationDetails?.type || '',
+                    decelerationCount: ctg.decelerationDetails?.count || '',
+                    contractions: ctg.contractions,
+                    soundStimulus: ctg.soundStimulus,
+                    stimulusCount: ctg.stimulusCount || '',
+                    notes: ctg.notes || ''
+                });
+                // Set existing conclusion if editing
+                setSuggestedConclusion(ctg.conclusion);
+            }
+        });
+    }
+  }, [ctgId]);
+
   // Scoring Logic based on image provided
   useEffect(() => {
       let score = 0;
@@ -59,12 +94,17 @@ const CTGForm: React.FC = () => {
 
       setCalculatedScore(score);
 
-      // Conclusion Suggestion
-      if (score >= 4) setSuggestedConclusion('Feto Ativo (Reativo)');
-      else if (score >= 2) setSuggestedConclusion('Feto Hipoativo (Hiporreativo)');
-      else setSuggestedConclusion('Feto Inativo (Não Reativo)');
+      // Only auto-suggest if NOT editing an existing record or if specifically desired.
+      // For now, we update it dynamically based on score changes to help the user.
+      // Note: If user manually changes the select, this effect will overwrite it if formData changes.
+      // To prevent that, we could track if user manually touched the select, but simple logic is requested.
+      if (!ctgId) {
+          if (score >= 4) setSuggestedConclusion('Feto ativo');
+          else if (score >= 2) setSuggestedConclusion('Feto Hipoativo');
+          else setSuggestedConclusion('Feto inativo');
+      }
 
-  }, [formData]);
+  }, [formData, ctgId]);
 
   const handleChange = (name: string, value: string) => {
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -75,8 +115,7 @@ const CTGForm: React.FC = () => {
       if (!id || !patient) return;
       setIsSubmitting(true);
 
-      const ctg: CTG = {
-          id: crypto.randomUUID(),
+      const ctgPayload: Partial<CTG> = {
           patientId: id,
           timestamp: new Date(`${date}T${time}`).toISOString(),
           baseline: Number(formData.baseline),
@@ -98,7 +137,12 @@ const CTGForm: React.FC = () => {
       };
 
       try {
-          await patientService.addCTG(ctg);
+          if (ctgId) {
+             await patientService.updateCTG(ctgId, ctgPayload);
+          } else {
+             // For creation, we need the full object, usually addCTG handles ID generation but better to follow pattern
+             await patientService.addCTG({ ...ctgPayload, id: crypto.randomUUID() } as CTG);
+          }
           navigate(`/patient/${id}`);
       } catch (error) {
           console.error(error);
@@ -108,22 +152,50 @@ const CTGForm: React.FC = () => {
       }
   };
 
+  const handleDelete = async () => {
+      if (!ctgId || !id) return;
+      if (confirm("Tem certeza que deseja excluir esta CTG? Esta ação não pode ser desfeita.")) {
+          setIsSubmitting(true);
+          try {
+              await patientService.deleteCTG(ctgId);
+              navigate(`/patient/${id}`);
+          } catch (error) {
+              console.error(error);
+              alert("Erro ao excluir CTG.");
+              setIsSubmitting(false);
+          }
+      }
+  };
+
   if (!patient) return <div className="p-8 text-center">Carregando...</div>;
 
   return (
     <div className="max-w-lg mx-auto pb-24">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6 pt-4 px-4">
-        <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full text-slate-600">
-          <ArrowLeft className="w-6 h-6" />
-        </button>
-        <div>
-            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Activity className="w-6 h-6 text-pink-600" />
-                Nova Cardiotocografia
-            </h1>
-            <p className="text-xs text-slate-500">{patient.name}</p>
+      <div className="flex items-center justify-between mb-6 pt-4 px-4 sticky top-16 bg-slate-50 z-10 py-2">
+        <div className="flex items-center gap-4">
+            <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full text-slate-600">
+            <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div>
+                <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <Activity className="w-6 h-6 text-pink-600" />
+                    {ctgId ? 'Editar Cardiotocografia' : 'Nova Cardiotocografia'}
+                </h1>
+                <p className="text-xs text-slate-500">{patient.name}</p>
+            </div>
         </div>
+        
+        {ctgId && (
+            <button 
+                type="button" 
+                onClick={handleDelete}
+                className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                title="Excluir CTG"
+            >
+                <Trash2 className="w-5 h-5" />
+            </button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="px-4 space-y-6">
@@ -371,9 +443,13 @@ const CTGForm: React.FC = () => {
                     value={suggestedConclusion}
                     onChange={e => setSuggestedConclusion(e.target.value)}
                 >
-                    <option value="Feto Ativo (Reativo)">Feto Ativo (Reativo)</option>
-                    <option value="Feto Hipoativo (Hiporreativo)">Feto Hipoativo (Hiporreativo)</option>
-                    <option value="Feto Inativo (Não Reativo)">Feto Inativo (Não Reativo)</option>
+                    <option value="Feto ativo">Feto ativo</option>
+                    <option value="Feto Hipoativo">Feto Hipoativo</option>
+                    <option value="Feto inativo">Feto inativo</option>
+                    <option disabled>---</option>
+                    <option value="Reativo">Reativo</option>
+                    <option value="Hiporreativo">Hiporreativo</option>
+                    <option value="Não reativo">Não reativo</option>
                     <option value="Bifásico">Bifásico</option>
                 </select>
                 <div className="mt-2 flex gap-1 items-start text-[10px] text-blue-600 bg-white/50 p-2 rounded">
