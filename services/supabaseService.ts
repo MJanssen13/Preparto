@@ -19,6 +19,7 @@ const supabase = (SUPABASE_URL && SUPABASE_KEY)
 
 const STORAGE_KEY_PATIENTS = 'maternocare_patients';
 const STORAGE_KEY_OBSERVATIONS = 'maternocare_observations';
+const STORAGE_KEY_CTGS = 'maternocare_ctgs';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -32,10 +33,7 @@ const isPatientResolved = (status: PatientStatus) => {
 };
 
 const isPatientExpired = (p: Patient): boolean => {
-  // Check if patient is resolved and has a discharge time
   const isResolved = isPatientResolved(p.status);
-  
-  // If we don't have dischargeTime (because DB column is missing or active), return false
   if (!isResolved) return false;
   if (!p.dischargeTime) return false; 
   
@@ -72,11 +70,9 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     ...(Array.isArray(p.schedule) && { schedule: p.schedule }),
     ...(p.lastObservation && { last_observation: p.lastObservation }),
     
-    // CTGs (Assuming JSONB column 'ctgs' in DB or handled by client-side join simulation if specific table exists, but usually simple JSONB is easiest for this list)
-    ...(p.ctgs && { ctgs: p.ctgs })
+    // REMOVED: ctgs mapping here. CTGs are now handled in a separate table.
   };
 
-  // Explicitly handle discharge_time to allow NULL (for reopening)
   if (p.dischargeTime === null) {
       payload.discharge_time = null;
   } else if (p.dischargeTime) {
@@ -101,7 +97,6 @@ const mapPatientFromDB = (db: any): Patient => {
     bloodType: db.blood_type,
     riskFactors: db.risk_factors,
     
-    // Protocols
     useMethyldopa: db.use_methyldopa,
     methyldopaStartTime: db.methyldopa_start_time,
     methyldopaEndTime: db.methyldopa_end_time,
@@ -113,9 +108,8 @@ const mapPatientFromDB = (db: any): Patient => {
     dischargeTime: db.discharge_time,
     schedule: db.schedule || [],
     lastObservation: db.last_observation,
-    // Map joined observations if they exist
     observations: db.observations ? db.observations.map(mapObservationFromDB) : undefined,
-    ctgs: db.ctgs || []
+    ctgs: db.ctgs ? db.ctgs.map(mapCTGFromDB) : []
   };
 };
 
@@ -126,19 +120,16 @@ const mapObservationToDB = (o: Partial<Observation>) => {
         ...(o.vitals && { 
             vitals: {
                 ...o.vitals,
-                dxt: o.vitals?.dxt // Ensure dxt is passed
+                dxt: o.vitals?.dxt
             }
         }),
         ...(o.obstetric && { obstetric: o.obstetric }),
-        
-        // Handle nested medication object manually to include misoprostol_count
         ...(o.medication && { 
             medication: {
                 ...o.medication,
                 misoprostolCount: o.medication.misoprostolCount
             } 
         }),
-        
         ...(o.magnesiumData && { magnesium_data: o.magnesiumData }),
         ...(o.examinerName && { examiner_name: o.examinerName }),
         ...(o.notes && { notes: o.notes }),
@@ -159,6 +150,48 @@ const mapObservationFromDB = (db: any): Observation => {
     }
 }
 
+// --- CTG MAPPERS ---
+const mapCTGToDB = (c: Partial<CTG>) => {
+  return {
+      ...(c.patientId && { patient_id: c.patientId }),
+      ...(c.timestamp && { timestamp: c.timestamp }),
+      ...(c.baseline && { baseline: c.baseline }),
+      ...(c.variability && { variability: c.variability }),
+      ...(c.accelerations && { accelerations: c.accelerations }),
+      ...(c.atMfRatio && { at_mf_ratio: c.atMfRatio }),
+      ...(c.movements && { movements: c.movements }),
+      ...(c.decelerations && { decelerations: c.decelerations }),
+      ...(c.decelerationDetails && { deceleration_details: c.decelerationDetails }),
+      ...(c.contractions && { contractions: c.contractions }),
+      ...(c.soundStimulus && { sound_stimulus: c.soundStimulus }),
+      ...(c.stimulusCount && { stimulus_count: c.stimulusCount }),
+      ...(c.score !== undefined && { score: c.score }),
+      ...(c.conclusion && { conclusion: c.conclusion }),
+      ...(c.notes && { notes: c.notes })
+  };
+};
+
+const mapCTGFromDB = (db: any): CTG => {
+  return {
+      id: db.id,
+      patientId: db.patient_id,
+      timestamp: db.timestamp,
+      baseline: db.baseline,
+      variability: db.variability,
+      accelerations: db.accelerations,
+      atMfRatio: db.at_mf_ratio,
+      movements: db.movements,
+      decelerations: db.decelerations,
+      decelerationDetails: db.deceleration_details,
+      contractions: db.contractions,
+      soundStimulus: db.sound_stimulus,
+      stimulusCount: db.stimulus_count,
+      score: db.score,
+      conclusion: db.conclusion,
+      notes: db.notes
+  };
+};
+
 // --- HELPER PARA MÍNIMO E MÁXIMO ---
 export const get24hStats = (observations: Observation[] | undefined) => {
     if (!observations || observations.length === 0) return null;
@@ -166,7 +199,6 @@ export const get24hStats = (observations: Observation[] | undefined) => {
     const now = new Date().getTime();
     const cutoff = now - (24 * 60 * 60 * 1000);
     
-    // Filter last 24h
     const recent = observations.filter(o => new Date(o.timestamp).getTime() > cutoff);
     if (recent.length === 0) return null;
 
@@ -198,17 +230,20 @@ export const patientService = {
         // LOCAL STORAGE
         const data = localStorage.getItem(STORAGE_KEY_PATIENTS);
         const obsData = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
+        const ctgData = localStorage.getItem(STORAGE_KEY_CTGS);
         
         let patients: Patient[] = data ? JSON.parse(data) : [];
         const allObs: Observation[] = obsData ? JSON.parse(obsData) : [];
+        const allCtgs: CTG[] = ctgData ? JSON.parse(ctgData) : [];
 
-        // Attach observations manually for LocalStorage flow
         patients = patients.map(p => ({
             ...p,
             observations: allObs
                 .filter(o => o.patientId === p.id)
                 .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-            ctgs: p.ctgs || [] // Ensure CTGs exist
+            ctgs: allCtgs
+                .filter(c => c.patientId === p.id)
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         }));
 
         patients = patients.filter(p => !isPatientExpired(p));
@@ -223,19 +258,21 @@ export const patientService = {
         });
     }
 
-    // SUPABASE: Join observations
+    // SUPABASE: Join observations AND ctgs
     const { data, error } = await supabase
         .from('patients')
-        .select('*, observations(*)')
+        .select('*, observations(*), ctgs(*)')
         .order('bed', { ascending: true });
         
     if (error) return [];
     
-    // Map and Sort observations descending for each patient
     const patients = data.map(dbPatient => {
         const p = mapPatientFromDB(dbPatient);
         if (p.observations) {
             p.observations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        }
+        if (p.ctgs) {
+            p.ctgs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         }
         return p;
     });
@@ -248,11 +285,19 @@ export const patientService = {
         const patients = await this.getPatients();
         return patients.find(p => p.id === id);
     }
-    const { data, error } = await supabase.from('patients').select('*, observations(*)').eq('id', id).single();
+    const { data, error } = await supabase
+        .from('patients')
+        .select('*, observations(*), ctgs(*)')
+        .eq('id', id)
+        .single();
+
     if (error || !data) return undefined;
     const p = mapPatientFromDB(data);
     if (p.observations) {
         p.observations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    }
+    if (p.ctgs) {
+        p.ctgs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }
     return p;
   },
@@ -262,12 +307,12 @@ export const patientService = {
         const patients = await this.getPatients();
         const newPatient: Patient = { ...patientData, id: crypto.randomUUID(), ctgs: [] };
         patients.push(newPatient);
-        // Clean observations before saving to storage to prevent duplication (re-attach on read)
-        const storagePatients = patients.map(({ observations, ...rest }) => rest);
+        const storagePatients = patients.map(({ observations, ctgs, ...rest }) => rest);
         localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(storagePatients));
         return newPatient;
     }
-    const dbPayload = mapPatientToDB({ ...patientData, ctgs: [] });
+    // ctgs are not saved in patient creation in DB, they are added separately
+    const dbPayload = mapPatientToDB(patientData);
     const { data, error } = await supabase.from('patients').insert(dbPayload).select().single();
     if (error) throw error;
     return mapPatientFromDB(data);
@@ -280,8 +325,7 @@ export const patientService = {
         if (index === -1) return null;
         patients[index] = { ...patients[index], ...updates };
         
-        // Clean observations before saving
-        const storagePatients = patients.map(({ observations, ...rest }) => rest);
+        const storagePatients = patients.map(({ observations, ctgs, ...rest }) => rest);
         localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(storagePatients));
         return patients[index];
     }
@@ -294,34 +338,25 @@ export const patientService = {
     return mapPatientFromDB(data);
   },
 
-  // Dedicated method to handle resolution logic atomically with FALLBACK
   async resolvePatient(id: string, newStatus: PatientStatus, customDischargeTime?: string): Promise<void> {
-      // 1. Fetch current patient to get the latest schedule
       const currentPatient = await this.getPatientById(id);
       if (!currentPatient) throw new Error('Patient not found');
 
-      // 2. Remove all pending tasks (Deletion requested)
       const updatedSchedule = (currentPatient.schedule || []).filter(task => 
           task.status !== 'pending'
       );
 
-      console.log('Resolving patient:', id, 'New Schedule:', updatedSchedule);
-
       const updates: Partial<Patient> = {
           status: newStatus,
-          // Use provided timestamp or fallback to current time
           dischargeTime: customDischargeTime || new Date().toISOString(),
           schedule: updatedSchedule
       };
 
-      // 3. Update DB with Error Handling
       try {
           const result = await this.updatePatient(id, updates);
-          if (!result) throw new Error('Failed to resolve patient (Database update returned null)');
+          if (!result) throw new Error('Failed to resolve patient');
       } catch (error: any) {
-          // CHECK FOR MISSING COLUMN ERROR (PGRST204 means column missing in schema)
-          if (error?.code === 'PGRST204' && (error?.message?.includes('discharge_time') || error?.details?.includes('discharge_time'))) {
-              console.warn("⚠️ COLUNA 'discharge_time' AUSENTE. Tentando resolver sem salvar data de alta.");
+          if (error?.code === 'PGRST204') {
               const { dischargeTime, ...fallbackUpdates } = updates;
               await this.updatePatient(id, fallbackUpdates);
               return; 
@@ -330,21 +365,16 @@ export const patientService = {
       }
   },
 
-  // NEW: Reopen Patient Logic
   async reopenPatient(id: string): Promise<void> {
-      console.log('Reopening patient:', id);
-      
       const updates: Partial<Patient> = {
-          status: PatientStatus.ACTIVE_LABOR, // Reset to active
-          dischargeTime: null // Clear discharge time
+          status: PatientStatus.ACTIVE_LABOR,
+          dischargeTime: null
       };
 
       try {
           await this.updatePatient(id, updates);
       } catch (error: any) {
-           // Fallback if discharge_time column is missing (it can't be set to null if it doesn't exist, but the update might fail if we try)
            if (error?.code === 'PGRST204') {
-               console.warn("⚠️ COLUNA 'discharge_time' AUSENTE. Reabrindo apenas mudando status.");
                await this.updatePatient(id, { status: PatientStatus.ACTIVE_LABOR });
                return;
            }
@@ -354,28 +384,36 @@ export const patientService = {
 
   async deletePatient(id: string): Promise<void> {
     if (!supabase) {
-        // Local Storage: Delete patient and observations
         const patientsStr = localStorage.getItem(STORAGE_KEY_PATIENTS);
         if (patientsStr) {
             const patients = JSON.parse(patientsStr);
             const newPatients = patients.filter((p: Patient) => p.id !== id);
             localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(newPatients));
         }
-
+        
+        // Remove obs
         const obsStr = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
         if (obsStr) {
             const obs = JSON.parse(obsStr);
             const newObs = obs.filter((o: Observation) => o.patientId !== id);
             localStorage.setItem(STORAGE_KEY_OBSERVATIONS, JSON.stringify(newObs));
         }
+
+        // Remove ctgs
+        const ctgStr = localStorage.getItem(STORAGE_KEY_CTGS);
+        if (ctgStr) {
+            const ctgs = JSON.parse(ctgStr);
+            const newCtgs = ctgs.filter((c: CTG) => c.patientId !== id);
+            localStorage.setItem(STORAGE_KEY_CTGS, JSON.stringify(newCtgs));
+        }
+
         return;
     }
 
-    // Supabase: Delete observations first to satisfy FK constraints (if cascade not set)
-    const { error: obsError } = await supabase.from('observations').delete().eq('patient_id', id);
-    if (obsError) throw obsError;
+    // Supabase: Delete observations and ctgs first (if not cascading)
+    await supabase.from('observations').delete().eq('patient_id', id);
+    await supabase.from('ctgs').delete().eq('patient_id', id);
 
-    // Delete patient
     const { error: patError } = await supabase.from('patients').delete().eq('id', id);
     if (patError) throw patError;
   },
@@ -439,8 +477,7 @@ export const patientService = {
                     t.id === scheduledTaskId ? { ...t, status: 'completed' } : t
                 );
             }
-            // Ensure we don't save the observations array to localStorage inside patients
-            const { observations, ...rest } = patients[patientIndex];
+            const { observations, ctgs, ...rest } = patients[patientIndex];
             patients[patientIndex] = rest as Patient; 
             localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(patients));
         }
@@ -449,12 +486,10 @@ export const patientService = {
     const timestamp = obsData.timestamp || new Date().toISOString();
     const dbPayload = mapObservationToDB({ ...obsData, timestamp });
     
-    // Save Observation first
     const { data, error } = await supabase.from('observations').insert(dbPayload).select().single();
     if (error) throw error;
     const newObs = mapObservationFromDB(data);
     
-    // Update Patient (Secondary) - Safe update
     try {
         await this.updatePatient(newObs.patientId, { lastObservation: newObs });
 
@@ -468,19 +503,23 @@ export const patientService = {
             }
         }
     } catch (err) {
-        console.warn("Observation saved, but patient update failed (likely schedule/lastObservation sync)", err);
+        console.warn("Observation saved, but patient update failed", err);
     }
 
     return newObs;
   },
 
   async addCTG(ctg: CTG): Promise<void> {
-      const patient = await this.getPatientById(ctg.patientId);
-      if (!patient) throw new Error('Patient not found');
+      if (!supabase) {
+          const data = localStorage.getItem(STORAGE_KEY_CTGS);
+          const allCtgs: CTG[] = data ? JSON.parse(data) : [];
+          allCtgs.push(ctg);
+          localStorage.setItem(STORAGE_KEY_CTGS, JSON.stringify(allCtgs));
+          return;
+      }
 
-      const currentCtgs = patient.ctgs || [];
-      const updatedCtgs = [...currentCtgs, ctg];
-
-      await this.updatePatient(ctg.patientId, { ctgs: updatedCtgs });
+      const dbPayload = mapCTGToDB(ctg);
+      const { error } = await supabase.from('ctgs').insert(dbPayload);
+      if (error) throw error;
   }
 };

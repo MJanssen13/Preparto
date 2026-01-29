@@ -12,6 +12,13 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
     // Function to generate the prontuario text (kept local to this component for the button)
     const formatToqueVaginal = (o: Observation['obstetric']) => {
         const parts = [];
+        
+        // Apresentação Fetal (Abbreviations)
+        const fetalMap: Record<string, string> = { 'Cefálico': 'CEF', 'Pélvico': 'PELV', 'Córmico': 'CORM' };
+        if (o.fetalPosition && fetalMap[o.fetalPosition]) {
+            parts.push(fetalMap[o.fetalPosition]);
+        }
+
         if (o.effacement !== undefined) parts.push(o.effacement === 0 ? 'G' : `${o.effacement}% AP`);
         const posMap: Record<string, string> = { 'Posterior': 'P', 'Intermediário': 'I', 'Central': 'C' };
         if (o.cervixPosition && posMap[o.cervixPosition]) parts.push(posMap[o.cervixPosition]);
