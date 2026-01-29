@@ -178,9 +178,9 @@ export const get24hStats = (observations: Observation[] | undefined) => {
         return `${min}-${max}`;
     };
 
-    const bcfValues = recent.map(o => o.obstetric.bcf).filter((v): v is number => v !== undefined);
-    const pasValues = recent.map(o => o.vitals.paSystolic).filter((v): v is number => v !== undefined);
-    const padValues = recent.map(o => o.vitals.paDiastolic).filter((v): v is number => v !== undefined);
+    const bcfValues = recent.map(o => o.obstetric?.bcf).filter((v): v is number => v !== undefined);
+    const pasValues = recent.map(o => o.vitals?.paSystolic).filter((v): v is number => v !== undefined);
+    const padValues = recent.map(o => o.vitals?.paDiastolic).filter((v): v is number => v !== undefined);
 
     return {
         bcf: formatRange(bcfValues),

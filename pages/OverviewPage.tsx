@@ -1,8 +1,7 @@
-
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, Observation } from '../types';
 import { patientService, get24hStats } from '../services/supabaseService';
-import { Activity, Copy, Clipboard, FileText, BedDouble, Maximize2, Minimize2, ChevronDown, ChevronUp, Ruler, Archive, CheckCircle2, Baby, Scissors, Search, Filter, ArrowDownAZ, ArrowDown01, Calendar } from 'lucide-react';
+import { Activity, Copy, Clipboard, FileText, BedDouble, Maximize2, Minimize2, ChevronDown, ChevronUp, Ruler, Search, ArrowDownAZ, ArrowDown01 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { VitalCharts } from '../components/VitalCharts';
 
@@ -307,6 +306,7 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
 };
 
 // --- Row Component for Summary View ---
+// Fixed: Explicitly typed component as React.FC to accept 'key' prop without TS error
 const PatientOverviewRow: React.FC<{ patient: Patient }> = ({ patient }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const observations = patient.observations || [];
