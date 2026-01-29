@@ -44,6 +44,7 @@ export interface ObstetricData {
   cervixConsistency?: 'Nasal' | 'Nasolabial' | 'Labial';
   presentationHeight?: 'AM' | 'INS'; // Novo: Alto e Móvel (AM) ou Insinuado (INS)
   station?: number; // Plano de De Lee (-4 a +4)
+  fetalPosition?: 'Cefálico' | 'Pélvico' | 'Córmico'; // Nova posição fetal
   
   membranes?: MembraneStatus;
   bloodOnGlove?: boolean; // Sangue em dedo de luva (SDL) ou Sem sangue (SSDL)
@@ -83,6 +84,28 @@ export interface ScheduledTask {
   status: 'pending' | 'completed' | 'cancelled';
 }
 
+export interface CTG {
+  id: string;
+  patientId: string;
+  timestamp: string;
+  baseline: number; // BPM
+  variability: 'Ausente' | '< 5' | '6-25' | '> 25' | 'Sinusoidal';
+  accelerations: 'Ausentes' | 'Presentes';
+  atMfRatio: '< 60%' | '> 60% ou 2 AT 20 min';
+  movements: 'Ausentes' | 'Presentes';
+  decelerations: 'Ausentes' | 'Presentes';
+  decelerationDetails?: {
+    count?: string;
+    type?: 'Precoce' | 'Tardia' | 'Variável';
+  };
+  contractions: 'Ausentes' | 'Presentes';
+  soundStimulus: 'Realizado' | 'Não Realizado';
+  stimulusCount?: string;
+  score: number; // 0-5 pts
+  conclusion: string; // Feto ativo, hipoativo, inativo, reativo...
+  notes?: string;
+}
+
 export interface Patient {
   id: string;
   name: string;
@@ -110,4 +133,5 @@ export interface Patient {
   lastObservation?: Observation;
   schedule: ScheduledTask[]; // Novo sistema de agendamento
   observations?: Observation[]; // Histórico para cálculos de média/min/max
+  ctgs?: CTG[]; // Lista de Cardiotocografias
 }

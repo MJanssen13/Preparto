@@ -1,5 +1,5 @@
 
-import { Patient, Observation, PatientStatus } from '../types';
+import { Patient, Observation, PatientStatus, CTG } from '../types';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURATION ---
@@ -70,7 +70,10 @@ const mapPatientToDB = (p: Partial<Patient>) => {
 
     // Schedule and Observations
     ...(Array.isArray(p.schedule) && { schedule: p.schedule }),
-    ...(p.lastObservation && { last_observation: p.lastObservation })
+    ...(p.lastObservation && { last_observation: p.lastObservation }),
+    
+    // CTGs (Assuming JSONB column 'ctgs' in DB or handled by client-side join simulation if specific table exists, but usually simple JSONB is easiest for this list)
+    ...(p.ctgs && { ctgs: p.ctgs })
   };
 
   // Explicitly handle discharge_time to allow NULL (for reopening)
@@ -111,7 +114,8 @@ const mapPatientFromDB = (db: any): Patient => {
     schedule: db.schedule || [],
     lastObservation: db.last_observation,
     // Map joined observations if they exist
-    observations: db.observations ? db.observations.map(mapObservationFromDB) : undefined
+    observations: db.observations ? db.observations.map(mapObservationFromDB) : undefined,
+    ctgs: db.ctgs || []
   };
 };
 
@@ -203,7 +207,8 @@ export const patientService = {
             ...p,
             observations: allObs
                 .filter(o => o.patientId === p.id)
-                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+            ctgs: p.ctgs || [] // Ensure CTGs exist
         }));
 
         patients = patients.filter(p => !isPatientExpired(p));
@@ -255,14 +260,14 @@ export const patientService = {
   async createPatient(patientData: Omit<Patient, 'id' | 'lastObservation'>): Promise<Patient> {
     if (!supabase) {
         const patients = await this.getPatients();
-        const newPatient: Patient = { ...patientData, id: crypto.randomUUID() };
+        const newPatient: Patient = { ...patientData, id: crypto.randomUUID(), ctgs: [] };
         patients.push(newPatient);
         // Clean observations before saving to storage to prevent duplication (re-attach on read)
         const storagePatients = patients.map(({ observations, ...rest }) => rest);
         localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(storagePatients));
         return newPatient;
     }
-    const dbPayload = mapPatientToDB(patientData);
+    const dbPayload = mapPatientToDB({ ...patientData, ctgs: [] });
     const { data, error } = await supabase.from('patients').insert(dbPayload).select().single();
     if (error) throw error;
     return mapPatientFromDB(data);
@@ -290,7 +295,7 @@ export const patientService = {
   },
 
   // Dedicated method to handle resolution logic atomically with FALLBACK
-  async resolvePatient(id: string, newStatus: PatientStatus): Promise<void> {
+  async resolvePatient(id: string, newStatus: PatientStatus, customDischargeTime?: string): Promise<void> {
       // 1. Fetch current patient to get the latest schedule
       const currentPatient = await this.getPatientById(id);
       if (!currentPatient) throw new Error('Patient not found');
@@ -304,7 +309,8 @@ export const patientService = {
 
       const updates: Partial<Patient> = {
           status: newStatus,
-          dischargeTime: new Date().toISOString(),
+          // Use provided timestamp or fallback to current time
+          dischargeTime: customDischargeTime || new Date().toISOString(),
           schedule: updatedSchedule
       };
 
@@ -466,5 +472,15 @@ export const patientService = {
     }
 
     return newObs;
+  },
+
+  async addCTG(ctg: CTG): Promise<void> {
+      const patient = await this.getPatientById(ctg.patientId);
+      if (!patient) throw new Error('Patient not found');
+
+      const currentCtgs = patient.ctgs || [];
+      const updatedCtgs = [...currentCtgs, ctg];
+
+      await this.updatePatient(ctg.patientId, { ctgs: updatedCtgs });
   }
 };

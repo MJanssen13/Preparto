@@ -40,6 +40,7 @@ const ObservationForm: React.FC = () => {
     cervixStatus: [] as string[], // NEW: OEEA, OEI, OII
     effacement: '',
     station: '',
+    fetalPosition: '', // NEW: Apresentação fetal
     cervixPosition: '',
     cervixConsistency: '',
     membranes: '' as MembraneStatus | '', // CHANGED: Default is empty, not INTACT
@@ -223,6 +224,7 @@ const ObservationForm: React.FC = () => {
                        cervixStatus: obs.obstetric.cervixStatus || [],
                        effacement: obs.obstetric.effacement !== undefined ? String(obs.obstetric.effacement) : '',
                        station: obs.obstetric.station !== undefined ? String(obs.obstetric.station) : '',
+                       fetalPosition: obs.obstetric.fetalPosition || '',
                        cervixPosition: obs.obstetric.cervixPosition || '',
                        cervixConsistency: obs.obstetric.cervixConsistency || '',
                        membranes: obs.obstetric.membranes || '' as MembraneStatus,
@@ -327,6 +329,7 @@ const ObservationForm: React.FC = () => {
           cervixStatus: activeParams.includes('Toque') ? formData.cervixStatus : undefined,
           effacement: activeParams.includes('Toque') ? numOrUndef(formData.effacement) : undefined,
           station: activeParams.includes('Toque') ? numOrUndef(formData.station) : undefined,
+          fetalPosition: activeParams.includes('Toque') ? (formData.fetalPosition as any) : undefined,
           cervixPosition: activeParams.includes('Toque') ? (formData.cervixPosition as any) : undefined,
           cervixConsistency: activeParams.includes('Toque') ? (formData.cervixConsistency as any) : undefined,
           // Only send membranes if Toque is active AND user selected a value (not empty string)
@@ -639,6 +642,16 @@ const ObservationForm: React.FC = () => {
                         </select>
                     </div>
                     
+                    <div>
+                        <label className="block text-xs font-medium text-slate-500 mb-1">Apresentação Fetal</label>
+                        <select name="fetalPosition" className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm" value={formData.fetalPosition} onChange={handleChange}>
+                            <option value="">Selecione</option>
+                            <option value="Cefálico">Cefálico</option>
+                            <option value="Pélvico">Pélvico</option>
+                            <option value="Córmico">Córmico</option>
+                        </select>
+                    </div>
+
                     <div>
                          <label className="block text-xs font-medium text-slate-500 mb-1">Bolsa</label>
                          <select name="membranes" className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm" value={formData.membranes} onChange={handleChange}>

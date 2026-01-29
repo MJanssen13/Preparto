@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, Table, CalendarClock } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -16,9 +16,18 @@ const PatientDetails: React.FC = () => {
   // Resolution Modal State
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Resolution Date/Time State
+  const [resDate, setResDate] = useState('');
+  const [resTime, setResTime] = useState('');
 
   useEffect(() => {
     if (id) loadData(id);
+    
+    // Init resolution time to now
+    const now = new Date();
+    setResDate(now.toISOString().split('T')[0]);
+    setResTime(now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
   }, [id]);
 
   const loadData = async (patientId: string) => {
@@ -37,16 +46,16 @@ const PatientDetails: React.FC = () => {
       setIsProcessing(true);
 
       try {
-          await patientService.resolvePatient(id, status);
+          // Construct the final timestamp
+          let finalTimestamp: string | undefined = undefined;
+          if (resDate && resTime) {
+             finalTimestamp = new Date(`${resDate}T${resTime}`).toISOString();
+          }
+
+          await patientService.resolvePatient(id, status, finalTimestamp);
           await loadData(id);
           setShowResolveModal(false);
           
-          // Verify discharge time check
-          const updatedP = await patientService.getPatientById(id);
-          if (updatedP && !updatedP.dischargeTime) {
-             // If dischargeTime is missing but status changed, it's the DB column issue.
-          }
-
       } catch (error: any) {
           console.error("Erro ao resolver paciente:", error);
           const errorMessage = error.message || 'Erro desconhecido';
@@ -104,6 +113,11 @@ const PatientDetails: React.FC = () => {
           } else {
               parts.push(`De Lee ${o.station > 0 ? '+' : ''}${o.station}`);
           }
+      }
+
+      // Fetal Position (Apresentação)
+      if (o.fetalPosition) {
+          parts.push(o.fetalPosition);
       }
 
       // Sangue
@@ -194,7 +208,12 @@ const PatientDetails: React.FC = () => {
         
         {!isResolved ? (
              <button 
-                onClick={() => setShowResolveModal(true)}
+                onClick={() => {
+                    const now = new Date();
+                    setResDate(now.toISOString().split('T')[0]);
+                    setResTime(now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                    setShowResolveModal(true);
+                }}
                 className="flex flex-col items-center justify-center p-2 text-medical-700 bg-medical-50 hover:bg-medical-100 rounded-lg border border-medical-200 transition-colors shadow-sm"
              >
                 <CheckCircle2 className="w-5 h-5" />
@@ -212,6 +231,35 @@ const PatientDetails: React.FC = () => {
         )}
       </div>
 
+      {/* Action Buttons Row */}
+      <div className="flex gap-2">
+          {!isResolved && (
+            <Link 
+              to={`/patient/${id}/add-observation`}
+              className="flex-1 bg-medical-600 hover:bg-medical-700 text-white shadow-md rounded-xl p-3 flex items-center justify-center gap-2 transition-all font-bold text-sm"
+            >
+              <Plus className="w-5 h-5" />
+              Nova Evolução
+            </Link>
+          )}
+          
+          <Link
+            to={`/patient/${id}/ctg`}
+            className="flex-1 bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 shadow-sm rounded-xl p-3 flex items-center justify-center gap-2 transition-all font-bold text-sm"
+          >
+            <Activity className="w-5 h-5" />
+            Nova CTG
+          </Link>
+
+          <Link 
+            to={`/patient/${id}/spreadsheet`}
+            className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm rounded-xl p-3 flex items-center justify-center gap-2 transition-all font-bold text-sm"
+          >
+            <Table className="w-5 h-5 text-green-600" />
+            Modo Planilha
+          </Link>
+      </div>
+
       {/* RESOLUTION MODAL */}
       {showResolveModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
@@ -222,8 +270,30 @@ const PatientDetails: React.FC = () => {
                          <X className="w-5 h-5 text-slate-400" />
                      </button>
                  </div>
+                 
                  <div className="p-4 space-y-3">
-                     <p className="text-xs text-slate-500 mb-2">Selecione o tipo de resolução para encerrar o acompanhamento:</p>
+                     {/* Date/Time Picker Block */}
+                     <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-2">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
+                            <CalendarClock className="w-3 h-3" /> Data e Hora do Ocorrido
+                        </label>
+                        <div className="flex gap-3">
+                            <input 
+                                type="date" 
+                                value={resDate} 
+                                onChange={e => setResDate(e.target.value)}
+                                className="flex-1 p-2 border border-slate-300 rounded text-sm bg-white font-bold text-slate-700"
+                            />
+                            <input 
+                                type="time" 
+                                value={resTime}
+                                onChange={e => setResTime(e.target.value)}
+                                className="w-24 p-2 border border-slate-300 rounded text-sm bg-white font-bold text-slate-700"
+                            />
+                        </div>
+                     </div>
+
+                     <p className="text-xs text-slate-500 mb-2">Selecione o tipo de resolução:</p>
                      
                      <button 
                         disabled={isProcessing}
@@ -343,17 +413,6 @@ const PatientDetails: React.FC = () => {
       {/* Charts Section */}
       <VitalCharts observations={observations} />
 
-      {/* Action Button */}
-      {!isResolved && (
-        <Link 
-          to={`/patient/${id}/add-observation`}
-          className="fixed bottom-20 right-6 md:static md:w-full md:block bg-medical-600 hover:bg-medical-700 text-white shadow-lg md:shadow-none rounded-full md:rounded-xl p-4 md:py-3 flex items-center justify-center gap-2 z-40 transition-all"
-        >
-          <Plus className="w-6 h-6" />
-          <span className="hidden md:inline font-bold">Adicionar Evolução</span>
-        </Link>
-      )}
-
       {/* Timeline Feed */}
       <div className="space-y-4">
         <h3 className="font-bold text-slate-700 px-1">Evolução Clínica</h3>
@@ -366,10 +425,17 @@ const PatientDetails: React.FC = () => {
              const isBcfAbnormal = obs.obstetric.bcf !== undefined && (obs.obstetric.bcf < 110 || obs.obstetric.bcf > 160);
              const toqueString = formatToqueVaginal(obs.obstetric);
 
+             // Verificar se há dados de magnésio válidos (não vazios)
+             const hasMagnesiumData = obs.magnesiumData && (
+                obs.magnesiumData.reflex || 
+                (obs.magnesiumData.diuresis && obs.magnesiumData.diuresis.trim() !== '') || 
+                obs.magnesiumData.respiratoryRate !== undefined
+             );
+
              return (
               <div key={obs.id} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 relative group">
                  <div className="absolute top-4 right-4 flex items-center gap-3">
-                   <span className="text-xs text-slate-400">
+                   <span className="text-xl font-bold text-slate-700 tracking-tight">
                      {new Date(obs.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                    </span>
                    {/* Allow editing observations even if resolved, for correction */}
@@ -377,7 +443,7 @@ const PatientDetails: React.FC = () => {
                     to={`/patient/${id}/edit-observation/${obs.id}`}
                     className="p-1.5 text-slate-300 hover:text-medical-600 hover:bg-slate-50 rounded-full transition-colors"
                    >
-                     <Edit2 className="w-3 h-3" />
+                     <Edit2 className="w-4 h-4" />
                    </Link>
                  </div>
 
@@ -478,21 +544,25 @@ const PatientDetails: React.FC = () => {
                         </div>
                     )}
 
-                     {/* Magnesium Protocol Data - Show if data exists, regardless of patient flag (History) */}
-                     {obs.magnesiumData && (
+                     {/* Magnesium Protocol Data - Show if data exists AND is not empty */}
+                     {hasMagnesiumData && obs.magnesiumData && (
                        <div className="col-span-2 bg-purple-100/50 p-2 rounded-lg border border-purple-200 text-xs text-purple-900 mt-2 flex flex-col gap-1">
                           <div className="font-bold text-[10px] uppercase tracking-wide text-purple-700 flex items-center gap-1">
                               <Activity className="w-3 h-3" /> Protocolo Magnésio
                           </div>
-                          <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-1">
-                                  <Hammer className="w-3 h-3 text-purple-500" />
-                                  <span>Reflexo: <b>{obs.magnesiumData.reflex}</b></span>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                  <Droplets className="w-3 h-3 text-purple-500" />
-                                  <span>Diurese: <b>{obs.magnesiumData.diuresis}</b></span>
-                              </div>
+                          <div className="flex items-center gap-4 flex-wrap">
+                              {obs.magnesiumData.reflex && (
+                                  <div className="flex items-center gap-1">
+                                      <Hammer className="w-3 h-3 text-purple-500" />
+                                      <span>Reflexo: <b>{obs.magnesiumData.reflex}</b></span>
+                                  </div>
+                              )}
+                              {obs.magnesiumData.diuresis && obs.magnesiumData.diuresis.trim() !== '' && (
+                                  <div className="flex items-center gap-1">
+                                      <Droplets className="w-3 h-3 text-purple-500" />
+                                      <span>Diurese: <b>{obs.magnesiumData.diuresis}</b></span>
+                                  </div>
+                              )}
                               {obs.magnesiumData.respiratoryRate !== undefined && (
                                   <div className="flex items-center gap-1">
                                       <Wind className="w-3 h-3 text-purple-500" />

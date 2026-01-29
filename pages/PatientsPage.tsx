@@ -3,11 +3,11 @@ import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
 import PatientCard from '../components/PatientCard';
-import { Search, BedDouble, UserPlus, Filter, ArrowDownAZ, ArrowDown01 } from 'lucide-react';
+import { Search, BedDouble, UserPlus, Filter, ArrowDownAZ, ArrowDown01, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 type FilterType = 'all' | 'active' | 'resolved';
-type SortType = 'name' | 'bed';
+type SortType = 'name' | 'bed' | 'admission';
 
 const PatientsPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -16,7 +16,8 @@ const PatientsPage: React.FC = () => {
   
   // Controls
   const [filterType, setFilterType] = useState<FilterType>('active');
-  const [sortType, setSortType] = useState<SortType>('bed');
+  // Changed default sort to 'admission' to organize by hospitalization date
+  const [sortType, setSortType] = useState<SortType>('admission');
 
   useEffect(() => {
     loadPatients();
@@ -54,6 +55,9 @@ const PatientsPage: React.FC = () => {
         // Sort Logic
         if (sortType === 'name') {
             return a.name.localeCompare(b.name);
+        } else if (sortType === 'admission') {
+            // Admission Date Ascending (Oldest First)
+            return new Date(a.admissionDate).getTime() - new Date(b.admissionDate).getTime();
         } else {
             // Bed sort (numeric aware)
             return a.bed.localeCompare(b.bed, undefined, { numeric: true });
@@ -112,6 +116,13 @@ const PatientsPage: React.FC = () => {
 
             {/* Sort Group */}
             <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm ml-auto">
+                <button 
+                   onClick={() => setSortType('admission')}
+                   className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'admission' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
+                   title="Ordenar por Data de Internação"
+                >
+                   <Calendar className="w-3 h-3" /> Data
+                </button>
                 <button 
                    onClick={() => setSortType('bed')}
                    className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'bed' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}

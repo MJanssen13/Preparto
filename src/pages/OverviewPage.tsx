@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Patient, PatientStatus, Observation } from '../types';
-import { patientService, get24hStats } from '../services/supabaseService';
-import { Activity, Copy, Clipboard, FileText, BedDouble, Maximize2, Minimize2, ChevronDown, ChevronUp, Ruler, Archive, CheckCircle2, Baby, Scissors, Search, Filter, ArrowDownAZ, ArrowDown01, Calendar } from 'lucide-react';
+import { patientService } from '../services/supabaseService';
+import { Activity, Copy, Clipboard, FileText, BedDouble, Maximize2, Minimize2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { VitalCharts } from '../components/VitalCharts';
 
@@ -108,8 +108,11 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
         alert('Texto copiado para a área de transferência!');
     };
 
+    // Helper for table rendering
+    let lastRenderDate = '';
+
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in slide-in-from-top-2 duration-300">
             
             {/* 1. Charts Column - With Maximize Capability */}
             <div className={`bg-white rounded-xl border border-slate-200 shadow-sm transition-all duration-300 ${isChartMaximized ? 'fixed inset-4 z-50 flex flex-col p-6 shadow-2xl' : 'p-4'}`}>
@@ -166,9 +169,20 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                                     const isBcfBad = obs.obstetric.bcf !== undefined && (obs.obstetric.bcf < 110 || obs.obstetric.bcf > 160);
                                     
                                     const dateObj = new Date(obs.timestamp);
-                                    
+                                    const dateStr = dateObj.toLocaleDateString('pt-BR');
+                                    const showDateHeader = dateStr !== lastRenderDate;
+                                    if (showDateHeader) lastRenderDate = dateStr;
+
                                     return (
                                         <React.Fragment key={obs.id}>
+                                            {/* Date Header Row */}
+                                            {showDateHeader && (
+                                                <tr className="bg-slate-100/80">
+                                                    <td colSpan={5} className="py-1.5 px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider border-y border-slate-200">
+                                                        {dateStr}
+                                                    </td>
+                                                </tr>
+                                            )}
                                             <tr className="hover:bg-slate-50/50">
                                                 {/* Hora */}
                                                 <td className="p-3 font-bold text-slate-700 align-top">
@@ -301,122 +315,10 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                         />
                     )}
                 </div>
+                <p className="text-[10px] text-slate-400 mt-2 text-center">
+                    Formato: Cronológico (Antigo &rarr; Novo). Copie e cole no sistema.
+                </p>
             </div>
-        </div>
-    );
-};
-
-// --- Row Component for Summary View ---
-const PatientOverviewRow: React.FC<{ patient: Patient }> = ({ patient }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const observations = patient.observations || [];
-    const stats = get24hStats(observations);
-    
-    // Last observation for static values (most recent)
-    const lastObs = observations.length > 0 ? observations[0] : null;
-
-    const getStatusBadge = (status: string) => {
-        if (status === PatientStatus.DISCHARGED) return <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-[10px] font-bold border border-slate-200 uppercase">Alta / Transf.</span>;
-        if (status === PatientStatus.PARTOGRAM_OPENED) return <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-200 uppercase">Partograma</span>;
-        if (status === PatientStatus.DELIVERY) return <span className="bg-teal-100 text-teal-700 px-2 py-1 rounded text-[10px] font-bold border border-teal-200 uppercase">Parto Normal</span>;
-        if (status === PatientStatus.C_SECTION) return <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-[10px] font-bold border border-indigo-200 uppercase">Cesárea</span>;
-        return null; 
-    };
-    
-    return (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm transition-all hover:shadow-md">
-            {/* Header Row - Always Visible */}
-            <div className="p-4 flex flex-col md:flex-row gap-4 md:items-center justify-between cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-                
-                {/* 1. Bed */}
-                <div className="flex items-center gap-4 min-w-[60px]">
-                    <div className="bg-slate-100 text-slate-600 px-2 py-3 rounded-lg font-bold text-xl border border-slate-200 w-full text-center">
-                        {patient.bed}
-                    </div>
-                </div>
-
-                {/* 2. Patient Info */}
-                <div className="flex-1 min-w-[200px]">
-                    <h3 className="font-bold text-slate-900 text-lg leading-tight">{patient.name}</h3>
-                    <div className="flex flex-wrap gap-2 text-xs mt-1">
-                        <span className="bg-slate-50 text-slate-500 px-1.5 py-0.5 rounded border border-slate-100 font-medium">
-                            {patient.gestationalAgeWeeks}s+{patient.gestationalAgeDays}d • {patient.parity}
-                        </span>
-                        {patient.riskFactors?.map(rf => (
-                            <span key={rf} className="bg-red-50 text-red-600 px-1.5 py-0.5 rounded border border-red-100 font-bold text-[10px] uppercase">
-                                {rf}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-
-                {/* 3. Obstetric Summary (24h) */}
-                <div className="flex-1 grid grid-cols-2 gap-4 border-l border-slate-100 pl-4 md:border-l-0 md:pl-0 md:border-r md:pr-4">
-                    <div className="flex flex-col justify-center">
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase mb-1">
-                            <Ruler className="w-3 h-3" /> Dilatação
-                        </div>
-                        <span className="font-bold text-slate-700 text-sm">
-                            {lastObs?.obstetric.dilation !== undefined ? `${lastObs.obstetric.dilation} cm` : 
-                             (lastObs?.obstetric.cervixStatus && lastObs.obstetric.cervixStatus.length > 0 ? lastObs.obstetric.cervixStatus[0] : '-')}
-                        </span>
-                    </div>
-
-                    <div className="flex flex-col justify-center">
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase mb-1">
-                            <Activity className="w-3 h-3" /> BCF (24h)
-                        </div>
-                        <span className={`font-bold text-sm ${stats?.hasBcf ? 'text-rose-600' : 'text-slate-400'}`}>
-                            {stats?.hasBcf ? `${stats.bcf} bpm` : '-'}
-                        </span>
-                    </div>
-                </div>
-
-                {/* 4. Vitals Summary (24h) */}
-                <div className="flex-1 md:max-w-[150px]">
-                    <div className="flex flex-col justify-center">
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase mb-1">
-                            <Activity className="w-3 h-3" /> PA (24h)
-                        </div>
-                        <span className="font-bold text-indigo-600 text-sm">
-                            {stats?.hasPa ? `${stats.pas} x ${stats.pad}` : '-'} <span className="text-slate-400 text-xs font-normal">mmHg</span>
-                        </span>
-                    </div>
-                </div>
-
-                {/* 5. Status / Actions */}
-                <div className="flex items-center justify-between md:justify-end gap-3 md:min-w-[240px] border-t pt-3 md:border-t-0 md:pt-0 mt-2 md:mt-0">
-                     <div className="flex-1 md:text-right">
-                         {getStatusBadge(patient.status)}
-                     </div>
-
-                     <div className="flex items-center gap-2">
-                         <Link 
-                            to={`/patient/${patient.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs font-bold text-medical-600 hover:text-white hover:bg-medical-600 px-3 py-2 rounded-lg border border-medical-200 transition-colors"
-                         >
-                            Detalhes
-                         </Link>
-                         <button 
-                            className={`p-2 rounded-lg transition-colors border ${isExpanded ? 'bg-slate-100 border-slate-300 text-slate-600' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'}`}
-                         >
-                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                         </button>
-                     </div>
-                </div>
-            </div>
-
-            {/* Expanded Content Body */}
-            {isExpanded && (
-                <div className="border-t border-slate-200 bg-slate-50/50 p-4 animate-in slide-in-from-top-1">
-                    <ExpandedContent 
-                        patient={patient} 
-                        observations={observations} 
-                        isLoading={false} 
-                    />
-                </div>
-            )}
         </div>
     );
 };
@@ -424,11 +326,6 @@ const PatientOverviewRow: React.FC<{ patient: Patient }> = ({ patient }) => {
 const OverviewPage: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Controls State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'active' | 'resolved' | 'all'>('active');
-  const [sortType, setSortType] = useState<'bed' | 'name'>('bed');
 
   useEffect(() => {
     loadPatients();
@@ -437,104 +334,18 @@ const OverviewPage: React.FC = () => {
   const loadPatients = async () => {
     setLoading(true);
     const data = await patientService.getPatients();
-    setPatients(data);
+    // Filter out discharged for General Overview, assuming we only want active/monitoring
+    const active = data.filter(p => p.status !== PatientStatus.DISCHARGED && p.status !== PatientStatus.PARTOGRAM_OPENED);
+    setPatients(active);
     setLoading(false);
   };
 
-  const isResolved = (status: string) => {
-      return [
-          PatientStatus.DISCHARGED, 
-          PatientStatus.PARTOGRAM_OPENED,
-          PatientStatus.DELIVERY,
-          PatientStatus.C_SECTION
-      ].includes(status as PatientStatus);
-  };
-
-  const filteredPatients = patients
-    .filter(p => {
-        // Text Search
-        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              p.bed.toLowerCase().includes(searchTerm.toLowerCase());
-        
-        // Filter Type
-        const resolved = isResolved(p.status);
-        if (filterType === 'active') return matchesSearch && !resolved;
-        if (filterType === 'resolved') return matchesSearch && resolved;
-        return matchesSearch; // 'all'
-    })
-    .sort((a, b) => {
-        if (sortType === 'name') {
-            return a.name.localeCompare(b.name);
-        } else {
-            // Bed sort
-            return a.bed.localeCompare(b.bed, undefined, { numeric: true });
-        }
-    });
-
   return (
-    <div className="space-y-6 pb-24">
-       {/* Header & Controls */}
-       <div className="flex flex-col gap-4 sticky top-16 bg-slate-50 z-20 py-2">
-           <div className="flex items-center justify-between">
-               <div>
-                   <h2 className="text-2xl font-bold text-slate-900">Painel Geral</h2>
-                   <p className="text-slate-500 text-sm">Visão consolidada do plantão</p>
-               </div>
-           </div>
-
-           {/* Search */}
-           <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por nome ou leito..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-medical-500 shadow-sm"
-                />
-            </div>
-
-           {/* Toolbar: Filters & Sorting */}
-           <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1">
-                {/* Filter Group */}
-                <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm">
-                    <button 
-                       onClick={() => setFilterType('active')}
-                       className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'active' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                       Ativos
-                    </button>
-                    <button 
-                       onClick={() => setFilterType('resolved')}
-                       className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'resolved' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                       Resolvidos
-                    </button>
-                    <button 
-                       onClick={() => setFilterType('all')}
-                       className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${filterType === 'all' ? 'bg-medical-50 text-medical-700' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                       Todos
-                    </button>
-                </div>
-
-                {/* Sort Group */}
-                <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm ml-auto">
-                    <button 
-                       onClick={() => setSortType('bed')}
-                       className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'bed' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-                       title="Ordenar por Leito"
-                    >
-                       <ArrowDown01 className="w-3 h-3" /> Leito
-                    </button>
-                    <button 
-                       onClick={() => setSortType('name')}
-                       className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${sortType === 'name' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-                       title="Ordenar por Nome"
-                    >
-                       <ArrowDownAZ className="w-3 h-3" /> Nome
-                    </button>
-                </div>
+    <div className="space-y-8 pb-24">
+       <div className="flex flex-col gap-2 sticky top-16 bg-slate-50 z-20 py-4 border-b border-slate-200">
+           <div>
+               <h2 className="text-2xl font-bold text-slate-900">Painel Geral</h2>
+               <p className="text-slate-500 text-sm">Visão detalhada de todos os pacientes ativos</p>
            </div>
        </div>
 
@@ -542,24 +353,37 @@ const OverviewPage: React.FC = () => {
             <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-600"></div>
             </div>
-       ) : filteredPatients.length === 0 ? (
+       ) : patients.length === 0 ? (
             <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
                 <BedDouble className="w-12 h-12 mx-auto mb-2 opacity-20" />
-                <p>Nenhum paciente encontrado com estes filtros.</p>
+                <p>Nenhum paciente ativo no momento.</p>
             </div>
        ) : (
-           <div className="space-y-4">
-               {/* Table Header - Visible on larger screens */}
-               <div className="hidden md:flex px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                   <div className="min-w-[60px] ml-4">Leito</div>
-                   <div className="flex-1 pl-4">Paciente / IG</div>
-                   <div className="flex-1 pl-4">Obstétrico (24h)</div>
-                   <div className="flex-1 max-w-[150px]">Vitas (24h)</div>
-                   <div className="min-w-[240px] text-right pr-12">Status</div>
-               </div>
-
-               {filteredPatients.map(patient => (
-                   <PatientOverviewRow key={patient.id} patient={patient} />
+           <div className="space-y-12">
+               {patients.map(patient => (
+                   <div key={patient.id} className="scroll-mt-32" id={`patient-${patient.id}`}>
+                       <div className="flex items-center gap-3 mb-4 bg-slate-100/50 p-3 rounded-lg border border-slate-200">
+                           <div className="bg-medical-100 text-medical-700 px-3 py-1 rounded-lg font-bold text-lg border border-medical-200 flex items-center gap-2 shadow-sm">
+                               <BedDouble className="w-5 h-5" /> {patient.bed}
+                           </div>
+                           <div>
+                               <h3 className="text-lg font-bold text-slate-800 leading-tight">{patient.name}</h3>
+                               <p className="text-xs text-slate-500">{patient.status}</p>
+                           </div>
+                           <Link 
+                                to={`/patient/${patient.id}`} 
+                                className="ml-auto text-xs bg-white border border-slate-200 text-slate-600 hover:text-medical-600 hover:border-medical-200 px-3 py-1.5 rounded-full font-bold transition-all shadow-sm"
+                           >
+                               Abrir Prontuário
+                           </Link>
+                       </div>
+                       
+                       <ExpandedContent 
+                           patient={patient} 
+                           observations={patient.observations || []} 
+                           isLoading={false} 
+                       />
+                   </div>
                ))}
            </div>
        )}
