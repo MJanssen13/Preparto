@@ -9,7 +9,6 @@ import AdmissionForm from './pages/AdmissionForm';
 import EditPatient from './pages/EditPatient';
 import ObservationForm from './pages/ObservationForm';
 import OverviewPage from './pages/OverviewPage';
-import SpreadsheetEntry from './pages/SpreadsheetEntry';
 import CTGForm from './pages/CTGForm';
 
 const App: React.FC = () => {
@@ -25,7 +24,6 @@ const App: React.FC = () => {
           <Route path="/patient/:id/edit" element={<EditPatient />} />
           <Route path="/patient/:id/add-observation" element={<ObservationForm />} />
           <Route path="/patient/:id/edit-observation/:obsId" element={<ObservationForm />} />
-          <Route path="/patient/:id/spreadsheet" element={<SpreadsheetEntry />} />
           <Route path="/patient/:id/ctg" element={<CTGForm />} />
         </Routes>
       </Layout>

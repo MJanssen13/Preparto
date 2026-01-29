@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, Table, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, CalendarClock } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -249,14 +249,6 @@ const PatientDetails: React.FC = () => {
           >
             <Activity className="w-5 h-5" />
             Nova CTG
-          </Link>
-
-          <Link 
-            to={`/patient/${id}/spreadsheet`}
-            className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm rounded-xl p-3 flex items-center justify-center gap-2 transition-all font-bold text-sm"
-          >
-            <Table className="w-5 h-5 text-green-600" />
-            Modo Planilha
           </Link>
       </div>
 
