@@ -13,6 +13,16 @@ const getEnv = (key: string) => {
 const SUPABASE_URL = getEnv('VITE_SUPABASE_URL') || 'https://itpdwlpraogwsdezsotl.supabase.co'; 
 const SUPABASE_KEY = getEnv('VITE_SUPABASE_ANON_KEY') || 'sb_publishable_w6fGM5XImiuAtOt-baidAQ_dzLurOtK';
 
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 const supabase = (SUPABASE_URL && SUPABASE_KEY) 
   ? createClient(SUPABASE_URL, SUPABASE_KEY) 
   : null;
@@ -46,6 +56,7 @@ const isPatientExpired = (p: Patient): boolean => {
 const mapPatientToDB = (p: Partial<Patient>) => {
   const payload: any = {
     ...(p.name && { name: p.name }),
+    ...(p.medicalRecordNumber && { medical_record_number: p.medicalRecordNumber }),
     ...(p.babyName && { baby_name: p.babyName }),
     ...(p.bed && { bed: p.bed }),
     ...(p.age && { age: p.age }),
@@ -70,6 +81,9 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     ...(Array.isArray(p.schedule) && { schedule: p.schedule }),
     ...(p.lastObservation && { last_observation: p.lastObservation }),
     
+    // Partogram Data
+    ...(p.partogramData && { partogram_data: p.partogramData }),
+
     // REMOVED: ctgs mapping here. CTGs are now handled in a separate table.
   };
 
@@ -86,6 +100,7 @@ const mapPatientFromDB = (db: any): Patient => {
   return {
     id: db.id,
     name: db.name,
+    medicalRecordNumber: db.medical_record_number,
     babyName: db.baby_name,
     bed: db.bed,
     age: db.age,
@@ -109,7 +124,8 @@ const mapPatientFromDB = (db: any): Patient => {
     schedule: db.schedule || [],
     lastObservation: db.last_observation,
     observations: db.observations ? db.observations.map(mapObservationFromDB) : undefined,
-    ctgs: db.ctgs ? db.ctgs.map(mapCTGFromDB) : []
+    ctgs: db.ctgs ? db.ctgs.map(mapCTGFromDB) : [],
+    partogramData: db.partogram_data
   };
 };
 
@@ -305,7 +321,7 @@ export const patientService = {
   async createPatient(patientData: Omit<Patient, 'id' | 'lastObservation'>): Promise<Patient> {
     if (!supabase) {
         const patients = await this.getPatients();
-        const newPatient: Patient = { ...patientData, id: crypto.randomUUID(), ctgs: [] };
+        const newPatient: Patient = { ...patientData, id: generateUUID(), ctgs: [] };
         patients.push(newPatient);
         const storagePatients = patients.map(({ observations, ctgs, ...rest }) => rest);
         localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(storagePatients));
@@ -313,8 +329,12 @@ export const patientService = {
     }
     // ctgs are not saved in patient creation in DB, they are added separately
     const dbPayload = mapPatientToDB(patientData);
+    console.log('Creating patient with payload:', dbPayload);
     const { data, error } = await supabase.from('patients').insert(dbPayload).select().single();
-    if (error) throw error;
+    if (error) {
+        console.error('Supabase Create Patient Error:', error);
+        throw error;
+    }
     return mapPatientFromDB(data);
   },
 
@@ -337,7 +357,8 @@ export const patientService = {
     }
     return mapPatientFromDB(data);
   },
-
+  
+  // ... rest of the service functions are the same as before
   async resolvePatient(id: string, newStatus: PatientStatus, customDischargeTime?: string): Promise<void> {
       const currentPatient = await this.getPatientById(id);
       if (!currentPatient) throw new Error('Patient not found');
@@ -469,7 +490,6 @@ export const patientService = {
         
         if (pIndex >= 0) {
             patients[pIndex].lastObservation = newLastObs;
-            // Also need to clean up nested observations if they are stored there (they shouldn't be persisted there in this model but good to check)
             localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(patients));
         }
         return;
@@ -479,7 +499,6 @@ export const patientService = {
     await supabase.from('observations').delete().eq('id', id);
 
     // Update patient's last_observation. 
-    // We need to fetch the *new* latest one.
     const { data: newLatestData } = await supabase
         .from('observations')
         .select('*')
@@ -492,11 +511,7 @@ export const patientService = {
         newLastObs = mapObservationFromDB(newLatestData[0]);
     }
 
-    // Convert back to DB format for the column
-    // The column in DB expects JSONB of the observation.
     const lastObsPayload = newLastObs ? mapObservationToDB(newLastObs) : null;
-
-    // Supabase update might accept the mapped object if the column is JSONB
     await supabase.from('patients').update({ last_observation: lastObsPayload }).eq('id', patientId);
   },
 
@@ -522,7 +537,7 @@ export const patientService = {
         const data = localStorage.getItem(STORAGE_KEY_OBSERVATIONS);
         const allObs: Observation[] = data ? JSON.parse(data) : [];
         const timestamp = obsData.timestamp || new Date().toISOString();
-        const newObs: Observation = { ...obsData, id: crypto.randomUUID(), timestamp };
+        const newObs: Observation = { ...obsData, id: generateUUID(), timestamp };
         allObs.push(newObs);
         localStorage.setItem(STORAGE_KEY_OBSERVATIONS, JSON.stringify(allObs));
         

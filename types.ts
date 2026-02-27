@@ -106,8 +106,52 @@ export interface CTG {
   notes?: string;
 }
 
+// --- PARTOGRAM TYPES ---
+export interface PartogramPoint {
+  x: number; // Hour index (0-12 usually)
+  y: number; // Value (0-10 or 80-180 for FCF)
+  type: 'dilation' | 'station' | 'fcf'; 
+}
+
+export interface PartogramContraction {
+  x: number; // Hour index
+  frequency: number; // 1-5
+  duration: 'weak' | 'moderate' | 'strong'; // <20s (X), 20-39s (Half), >40s (Full)
+}
+
+export interface PartogramContractionBlock {
+    x: number; // hour index
+    slot: number; // 0-4 (0 is bottom)
+    type: 'weak' | 'moderate' | 'strong';
+}
+
+export interface PartogramTableColumn {
+  hourIndex: number;
+  registerHour?: string; // Editable "Hora de registro"
+  realTime: string; // "14:00"
+  date?: string; // Data (e.g. 25/02)
+  amnioticFluid: string; // Bolsa
+  la: string; // LA (Liquido Amniotico)
+  oxytocin: string;
+  meds: string;
+  examiner: string;
+  notes: string; // Coluna lateral de observações
+}
+
+export interface PartogramData {
+  activePhaseStartIndex?: number; // The X index where the "Alert Line" starts
+  points: PartogramPoint[];
+  contractions: PartogramContraction[]; // New array for contraction bars
+  contractionBlocks?: PartogramContractionBlock[]; // Detailed blocks
+  tableData: PartogramTableColumn[];
+  startTime?: string; // Timestamp of when the graph starts (index 0)
+  headerData?: any;
+  observations?: string;
+}
+
 export interface Patient {
   id: string;
+  medicalRecordNumber?: string; // Prontuário
   name: string;
   babyName?: string; // Nome do bebê
   bed: string;
@@ -134,4 +178,5 @@ export interface Patient {
   schedule: ScheduledTask[]; // Novo sistema de agendamento
   observations?: Observation[]; // Histórico para cálculos de média/min/max
   ctgs?: CTG[]; // Lista de Cardiotocografias
+  partogramData?: PartogramData; // Dados do Partograma
 }

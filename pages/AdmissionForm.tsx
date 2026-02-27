@@ -17,6 +17,7 @@ const AdmissionForm: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
+    medicalRecordNumber: '',
     babyName: '',
     bed: '',
     age: '',
@@ -161,6 +162,16 @@ const AdmissionForm: React.FC = () => {
     }
   };
 
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -169,7 +180,7 @@ const AdmissionForm: React.FC = () => {
     const schedule: ScheduledTask[] = timeSlots
       .filter(slot => slot.selectedParams.length > 0)
       .map(slot => ({
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         timestamp: slot.time.toISOString(),
         focus: slot.selectedParams,
         status: 'pending'
@@ -180,6 +191,7 @@ const AdmissionForm: React.FC = () => {
     try {
       await patientService.createPatient({
         name: formData.name,
+        medicalRecordNumber: formData.medicalRecordNumber,
         babyName: formData.babyName,
         bed: formData.bed,
         age: Number(formData.age),
@@ -201,9 +213,9 @@ const AdmissionForm: React.FC = () => {
         schedule: schedule
       });
       navigate('/');
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao admitir paciente.');
+    } catch (error: any) {
+      console.error('Admission Error:', error);
+      alert(`Erro ao admitir paciente: ${error.message || JSON.stringify(error)}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -250,6 +262,18 @@ const AdmissionForm: React.FC = () => {
             value={formData.name}
             onChange={handleChange}
           />
+        </div>
+
+        <div>
+           <label className="block text-sm font-medium text-slate-700 mb-1">Prontuário</label>
+           <input
+             name="medicalRecordNumber"
+             type="text"
+             placeholder="Ex: 123456"
+             className="w-full p-3 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none"
+             value={formData.medicalRecordNumber}
+             onChange={handleChange}
+           />
         </div>
 
         <div>

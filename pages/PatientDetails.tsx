@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus, CTG } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, CalendarClock, HeartPulse } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, CalendarClock, HeartPulse, FileText, Copy } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -13,6 +13,9 @@ const PatientDetails: React.FC = () => {
   const [observations, setObservations] = useState<Observation[]>([]);
   const [ctgs, setCtgs] = useState<CTG[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Prontuario Text State
+  const [prontuarioText, setProntuarioText] = useState('');
   
   // Resolution Modal State
   const [showResolveModal, setShowResolveModal] = useState(false);
@@ -40,6 +43,118 @@ const PatientDetails: React.FC = () => {
         setCtgs(p.ctgs || []);
     }
     setLoading(false);
+  };
+
+  // --- PRONTUÁRIO TEXT GENERATION ---
+  const generateProntuarioText = (p: Patient, obsList: Observation[], ctgList: CTG[]) => {
+      const sortedObs = [...obsList].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      let text = '';
+      let lastDate = '';
+
+      // Helper helper for Toque inside generator
+      const getToqueText = (o: Observation['obstetric']) => {
+          const parts = [];
+          const fetalMap: Record<string, string> = { 'Cefálico': 'CEF', 'Pélvico': 'PELV', 'Córmico': 'CORM' };
+          if (o.fetalPosition && fetalMap[o.fetalPosition]) parts.push(fetalMap[o.fetalPosition]);
+          if (o.effacement !== undefined) parts.push(o.effacement === 0 ? 'G' : `${o.effacement}% AP`);
+          const posMap: Record<string, string> = { 'Posterior': 'P', 'Intermediário': 'I', 'Central': 'C' };
+          if (o.cervixPosition && posMap[o.cervixPosition]) parts.push(posMap[o.cervixPosition]);
+          const conMap: Record<string, string> = { 'Nasal': 'N', 'Nasolabial': 'NL', 'Labial': 'L' };
+          if (o.cervixConsistency && conMap[o.cervixConsistency]) parts.push(conMap[o.cervixConsistency]);
+          
+          if (o.dilation !== undefined && o.dilation > 0) parts.push(`${o.dilation}CM`);
+          else if (o.cervixStatus && o.cervixStatus.length > 0) parts.push(o.cervixStatus.join(', '));
+          else if (o.dilation === 0) parts.push('0CM');
+
+          if (o.station !== undefined) {
+               if (o.station === -4) parts.push('AM');
+               else parts.push(`DE LEE ${o.station > 0 ? '+' : ''}${o.station}`);
+          }
+          if (o.bloodOnGlove !== undefined) parts.push(o.bloodOnGlove ? 'SDL' : 'SSDL');
+          if (o.cervixObservation) parts.push(`OBS: ${o.cervixObservation}`);
+          
+          return parts.length > 0 ? `TOQUE: ${parts.join(', ')}` : '';
+      };
+
+      sortedObs.forEach(o => {
+          const dateObj = new Date(o.timestamp);
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const year = String(dateObj.getFullYear()).slice(-2);
+          const dateStr = `${day}/${month}/${year}`;
+
+          if (dateStr !== lastDate) {
+              text += `# ${dateStr} #\n`;
+              lastDate = dateStr;
+          }
+
+          const time = dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          const lineParts = [`${time} HS`];
+          
+          if (o.obstetric.bcf) lineParts.push(`BCF: ${o.obstetric.bcf} BPM`);
+          if (o.vitals.paSystolic) lineParts.push(`PA: ${o.vitals.paSystolic}X${o.vitals.paDiastolic} MMHG`);
+          
+          if (o.obstetric.dinamicaSummary) lineParts.push(`DU ${o.obstetric.dinamicaSummary.toUpperCase()}`);
+          else if (o.obstetric.dinamicaFrequency) lineParts.push(`DU ${o.obstetric.dinamicaFrequency}/10'`);
+          
+          const toqueStr = getToqueText(o.obstetric);
+          if (toqueStr) lineParts.push(toqueStr);
+          
+          if (o.vitals.dxt) lineParts.push(`DXT: ${o.vitals.dxt} MG/DL`);
+
+          if (o.medication?.misoprostolDose) {
+              const countStr = o.medication.misoprostolCount ? `${o.medication.misoprostolCount}º ` : '';
+              lineParts.push(`${countStr}MISO ${o.medication.misoprostolDose}MCG`);
+          }
+          if (o.medication?.oxytocinDose) lineParts.push(`OCITOCINA ${o.medication.oxytocinDose} ML/H`);
+
+          if (o.magnesiumData) {
+              if (o.magnesiumData.diuresis) lineParts.push(`DIURESE ${o.magnesiumData.diuresis}`);
+              if (o.magnesiumData.reflex) lineParts.push(`REFLEXO ${o.magnesiumData.reflex.toUpperCase()}`);
+          }
+          
+          if (o.notes) lineParts.push(o.notes.toUpperCase());
+          
+          text += lineParts.join(' | ') + '\n';
+      });
+
+      if (ctgList && ctgList.length > 0) {
+          text += '\n--- CARDIOTOCOGRAFIAS ---\n';
+          const sortedCtgs = [...ctgList].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          sortedCtgs.forEach(ctg => {
+              const d = new Date(ctg.timestamp);
+              const dateStr = d.toLocaleDateString('pt-BR');
+              const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+              text += `[${dateStr} ${timeStr}] CTG: LB ${ctg.baseline}BPM | VARIAB: ${ctg.variability.toUpperCase()} | AT/MF: ${ctg.atMfRatio.replace('<', 'MENOR ').replace('>', 'MAIOR ').toUpperCase()} | DESC: ${ctg.decelerations.toUpperCase()} | SCORE: ${ctg.score}/5 (${ctg.conclusion.toUpperCase()})`;
+              if (ctg.notes) text += ` | OBS: ${ctg.notes.toUpperCase()}`;
+              text += '\n';
+          });
+      }
+
+      if (p.status === PatientStatus.PARTOGRAM_OPENED) {
+          text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
+      } else if (p.status === PatientStatus.DELIVERY) {
+          text += "\nEVOLUIU PARA PARTO NORMAL.";
+      } else if (p.status === PatientStatus.C_SECTION) {
+          text += "\nENCAMINHADA PARA CESÁREA.";
+      } else if (p.status === PatientStatus.DISCHARGED) {
+          text += "\nALTA / TRANSFERÊNCIA.";
+      }
+
+      return text;
+  };
+
+  // Sync text when data changes (e.g. deletion)
+  useEffect(() => {
+      if (patient) {
+          const text = generateProntuarioText(patient, observations, ctgs);
+          setProntuarioText(text);
+      }
+  }, [patient, observations, ctgs]);
+
+  const copyProntuarioToClipboard = () => {
+      navigator.clipboard.writeText(prontuarioText);
+      alert('Texto copiado para a área de transferência!');
   };
 
   const handleResolution = async (status: PatientStatus) => {
@@ -257,6 +372,14 @@ const PatientDetails: React.FC = () => {
             <Activity className="w-5 h-5" />
             Nova CTG
           </Link>
+          
+          <Link
+            to={`/patient/${id}/partogram`}
+            className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm rounded-xl p-3 flex items-center justify-center gap-2 transition-all font-bold text-sm"
+          >
+            <FileText className="w-5 h-5" />
+            Abrir Partograma
+          </Link>
       </div>
 
       {/* RESOLUTION MODAL */}
@@ -412,9 +535,38 @@ const PatientDetails: React.FC = () => {
       {/* Charts Section */}
       <VitalCharts observations={observations} />
 
+      {/* Copiar para Prontuário Section - EDITABLE */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
+                  <FileText className="w-4 h-4" /> Copiar para Prontuário
+              </h4>
+              <button 
+                  onClick={copyProntuarioToClipboard}
+                  className="text-xs bg-white text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded border border-slate-200 flex items-center gap-1 transition-colors font-medium shadow-sm"
+              >
+                  <Copy className="w-3 h-3" /> Copiar Texto
+              </button>
+          </div>
+          <textarea 
+              value={prontuarioText}
+              onChange={(e) => setProntuarioText(e.target.value)}
+              className="w-full h-32 p-3 text-xs font-mono text-slate-700 resize-y focus:outline-none focus:bg-slate-50 transition-colors"
+              placeholder="Aguardando dados..."
+          />
+      </div>
+
       {/* Timeline Feed */}
       <div className="space-y-4">
-        <h3 className="font-bold text-slate-700 px-1">Evolução Clínica</h3>
+        <div className="flex items-center justify-between px-1">
+          <h3 className="font-bold text-slate-700">Evolução Clínica</h3>
+          <Link 
+            to={`/patient/${id}/bulk-observations`}
+            className="text-xs flex items-center gap-1 text-medical-600 hover:text-medical-700 font-bold bg-medical-50 hover:bg-medical-100 px-2 py-1 rounded transition-colors"
+          >
+            <Plus className="w-3 h-3" /> Adicionar Lote
+          </Link>
+        </div>
         {timelineItems.length === 0 ? (
           <div className="text-center py-8 text-slate-400 bg-white rounded-xl">
             Nenhuma observação registrada.

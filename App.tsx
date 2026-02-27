@@ -10,6 +10,8 @@ import EditPatient from './pages/EditPatient';
 import ObservationForm from './pages/ObservationForm';
 import OverviewPage from './pages/OverviewPage';
 import CTGForm from './pages/CTGForm';
+import PartogramPage from './pages/PartogramPage';
+import BulkObservationForm from './pages/BulkObservationForm';
 
 const App: React.FC = () => {
   return (
@@ -24,8 +26,10 @@ const App: React.FC = () => {
           <Route path="/patient/:id/edit" element={<EditPatient />} />
           <Route path="/patient/:id/add-observation" element={<ObservationForm />} />
           <Route path="/patient/:id/edit-observation/:obsId" element={<ObservationForm />} />
+          <Route path="/patient/:id/bulk-observations" element={<BulkObservationForm />} />
           <Route path="/patient/:id/ctg" element={<CTGForm />} />
           <Route path="/patient/:id/edit-ctg/:ctgId" element={<CTGForm />} />
+          <Route path="/patient/:id/partogram" element={<PartogramPage />} />
         </Routes>
       </Layout>
     </Router>
