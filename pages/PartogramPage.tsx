@@ -4,7 +4,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { Patient, PartogramData, PartogramPoint, PartogramTableColumn, PartogramContractionBlock } from '../types';
 import { ArrowLeft, Save, X, Square, Eraser, Trash2, Printer } from 'lucide-react';
-import partogramaImg from '../src/assets/partograma.png';
 
 // --- EXACT COORDINATES FROM NEW UFTM SVG (2481 x 3508) ---
 const VIEWBOX_W = 2481;
@@ -579,9 +578,9 @@ const PartogramPage: React.FC = () => {
              >
                  {/* BACKGROUND IMAGE 
                      To change the background, upload a high-res PNG (2481x3508) to the public folder 
-                     and name it 'partograma.png', or update the href below. 
+                     and name it 'partograma.png'. 
                  */}
-                 <image href={partogramaImg} width="2481" height="3508" preserveAspectRatio="none" />
+                 <image href="/partograma.png" width="2481" height="3508" preserveAspectRatio="none" />
 
                  {/* MAIN TRANSFORM GROUP */}
                  <g transform="matrix(1.04175,0,0,1.04175,-50.052284,-610.189202)">
