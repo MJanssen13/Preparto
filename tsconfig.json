@@ -29,10 +29,11 @@
     "./components/**/*.ts",
     "./components/**/*.tsx",
     "./services/**/*.ts",
-    "./services/**/*.tsx"
+    "./services/**/*.tsx",
+    "./src/**/*.ts",
+    "./src/**/*.tsx"
   ],
   "exclude": [
-    "src",
     "node_modules"
   ]
 }
