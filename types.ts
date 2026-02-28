@@ -112,6 +112,8 @@ export interface PartogramPoint {
   x: number; // Hour index (0-12 usually)
   y: number; // Value (0-10 or 80-180 for FCF)
   type: 'dilation' | 'station' | 'fcf'; 
+  variety?: string; // e.g., 'OP', 'OEA', etc. or just the shape type
+  rotation?: number; // 0, 45, 90, 135, 180, 225, 270
 }
 
 export interface PartogramContraction {

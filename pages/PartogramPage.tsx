@@ -57,6 +57,17 @@ const TABLE_ROWS_CONFIG = [
     { key: 'examiner', y: 3732.229, h: 160.037, rotate: true }    // Examinador
 ];
 
+// Varieties of Presentation
+const VARIETIES = [
+    { id: 'P', label: 'Padrão', src: '/varieties/P.png' },
+    { id: 'PS', label: 'Pélvica simples', src: '/varieties/PS.png' },
+    { id: 'PP', label: 'Pélvica podal', src: '/varieties/PP.png' },
+    { id: 'O', label: 'Occipto', src: '/varieties/O.png' },
+    { id: 'B', label: 'Bregma', src: '/varieties/B.png' },
+    { id: 'N', label: 'Nariz', src: '/varieties/N.png' },
+    { id: 'M', label: 'Mento', src: '/varieties/M.png' }
+];
+
 const PartogramPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -92,6 +103,18 @@ const PartogramPage: React.FC = () => {
   const [inputMode, setInputMode] = useState<'dilation' | 'station' | 'fcf' | 'contraction' | 'eraser'>('dilation');
   const [contractionType, setContractionType] = useState<'weak' | 'moderate' | 'strong'>('moderate');
   
+  // Unified Menu State (Dilation + Station)
+  const [unifiedMenu, setUnifiedMenu] = useState<{
+      isOpen: boolean;
+      hourIndex: number;
+      x: number;
+      y: number;
+      dilation: number | null;
+      station: number | null;
+      variety: string | undefined;
+      rotation: number;
+  } | null>(null);
+
   // Contraction Menu State
   const [contractionMenu, setContractionMenu] = useState<{
       isOpen: boolean;
@@ -101,24 +124,6 @@ const PartogramPage: React.FC = () => {
       weak: number;
       moderate: number;
       strong: number;
-  } | null>(null);
-
-  // Dilation Menu State
-  const [dilationMenu, setDilationMenu] = useState<{
-      isOpen: boolean;
-      hourIndex: number;
-      x: number;
-      y: number;
-      value: number;
-  } | null>(null);
-
-  // Station Menu State
-  const [stationMenu, setStationMenu] = useState<{
-      isOpen: boolean;
-      hourIndex: number;
-      x: number;
-      y: number;
-      value: number;
   } | null>(null);
 
   useEffect(() => {
@@ -253,37 +258,24 @@ const PartogramPage: React.FC = () => {
              return;
           }
 
-          const relY = clickY - Y_DILATION_10;
-          const valPerPx = 10 / GRAPH_H;
-          const rawVal = 10 - (relY * valPerPx);
-          const value = Math.round(rawVal); // 0-10
-          
-          if (inputMode === 'dilation') {
-              setDilationMenu({
+          // Open Unified Menu for both Dilation and Station
+          if (inputMode === 'dilation' || inputMode === 'station') {
+              // Find existing values
+              const existingDilation = points.find(p => p.x === hourIndex && p.type === 'dilation');
+              const existingStation = points.find(p => p.x === hourIndex && p.type === 'station');
+
+              // Calculate default from click if needed, but menu allows selection
+              // For now, just open with existing or null
+              
+              setUnifiedMenu({
                   isOpen: true,
                   hourIndex,
                   x: visualClickX,
                   y: visualClickY,
-                  value: Math.min(10, Math.max(0, value))
-              });
-          } else if (inputMode === 'station') {
-              // Station is -4 to +4 (mapped to 0-10 scale visually roughly, but logic needs check)
-              // Actually station is usually plotted on the same graph. 
-              // Let's assume the click Y maps to the station value directly if we want.
-              // But standard partograms map station -3 to +3 or similar on the same 0-10 grid.
-              // Let's stick to the calculated value and let user adjust in menu.
-              // Map 0-10 range to typical station range if needed, or just use the value.
-              // Standard: 0 dilation ~ -3 station? It varies. 
-              // Let's just default to the calculated value (0-10) and let the menu handle the specific station values (-5 to +5).
-              // Actually, let's map the click to a reasonable default station.
-              // If Y is high (bottom), station is low (e.g. -3). If Y is low (top), station is high (+3).
-              // Let's just open the menu with a default or 0.
-              setStationMenu({
-                  isOpen: true,
-                  hourIndex,
-                  x: visualClickX,
-                  y: visualClickY,
-                  value: 0 // Default to 0, user selects
+                  dilation: existingDilation ? existingDilation.y : null,
+                  station: existingStation ? (6 - existingStation.y) : null, // Reverse mapping: y = 6 - val => val = 6 - y
+                  variety: existingStation?.variety,
+                  rotation: existingStation?.rotation || 0
               });
           }
       }
@@ -345,72 +337,36 @@ const PartogramPage: React.FC = () => {
       }
   };
 
-  const confirmDilation = (val: number) => {
-      if (!dilationMenu) return;
-      const { hourIndex } = dilationMenu;
-      
-      const existingIndex = points.findIndex(p => p.x === hourIndex && p.type === 'dilation');
-      if (existingIndex >= 0) {
-          const newPoints = [...points];
-          newPoints[existingIndex].y = val;
-          setPoints(newPoints);
-      } else {
-          setPoints(prev => [...prev, { x: hourIndex, y: val, type: 'dilation' }]);
-      }
-      setDilationMenu(null);
-  };
+  const confirmUnified = () => {
+      if (!unifiedMenu) return;
+      const { hourIndex, dilation, station, variety, rotation } = unifiedMenu;
 
-  const confirmStation = (val: number) => {
-      if (!stationMenu) return;
-      const { hourIndex } = stationMenu;
-      
-      // Map station value (-5 to +5) to graph Y (0-10)
-      // Usually De Lee planes are plotted against the same 0-10 grid.
-      // 0 dilation line often aligns with -3 station? Or 0 station?
-      // Let's assume the user wants to plot the value 'val' on the 0-10 grid.
-      // But wait, De Lee is -5 to +5. The grid is 0 to 10.
-      // We need a mapping. 
-      // Looking at the SVG text:
-      // 10 cm -> -3 De Lee (High) ??? No, usually:
-      // 10 cm -> +4/+5 (Low)
-      // Let's look at the SVG labels again.
-      // Left Axis (Dilatação): 10, 9, 8 ... 0
-      // Right Axis (De Lee): -3, -2, -1, 0, +1, +2, +3, +4, +5
-      // So:
-      // 10cm = -3
-      // 9cm = -2
-      // 8cm = -1 (Wait, 10 is high up, 0 is low down)
-      // Let's check the SVG text coordinates.
-      // Text "10" is at y=1266. Text "-3" is at y=1325 (lower).
-      // Actually, let's look at the SVG text content provided in previous turn.
-      // 10 (Dil) aligns with -AM (De Lee?)
-      // 9 (Dil) aligns with -3
-      // 8 (Dil) aligns with -2
-      // 7 (Dil) aligns with -1
-      // 6 (Dil) aligns with 0
-      // 5 (Dil) aligns with +1
-      // 4 (Dil) aligns with +2
-      // 3 (Dil) aligns with +3
-      // 2 (Dil) aligns with +4
-      // 1 (Dil) aligns with V (Vulva?)
-      
-      // So the mapping is:
-      // De Lee = 6 - Dilation (roughly) => Dilation = 6 - De Lee
-      // If user selects De Lee 0, we plot at Dilation 6.
-      // If user selects De Lee -3, we plot at Dilation 9.
-      // If user selects De Lee +3, we plot at Dilation 3.
-      
-      const yValue = 6 - val; 
-      
-      const existingIndex = points.findIndex(p => p.x === hourIndex && p.type === 'station');
-      if (existingIndex >= 0) {
-          const newPoints = [...points];
-          newPoints[existingIndex].y = yValue;
-          setPoints(newPoints);
-      } else {
-          setPoints(prev => [...prev, { x: hourIndex, y: yValue, type: 'station' }]);
-      }
-      setStationMenu(null);
+      setPoints(prev => {
+          let newPoints = [...prev];
+          
+          // Handle Dilation
+          newPoints = newPoints.filter(p => !(p.x === hourIndex && p.type === 'dilation'));
+          if (dilation !== null) {
+              newPoints.push({ x: hourIndex, y: dilation, type: 'dilation' });
+          }
+
+          // Handle Station
+          newPoints = newPoints.filter(p => !(p.x === hourIndex && p.type === 'station'));
+          if (station !== null) {
+              const yValue = 6 - station; // Apply mapping logic
+              newPoints.push({ 
+                  x: hourIndex, 
+                  y: yValue, 
+                  type: 'station',
+                  variety: variety,
+                  rotation: rotation
+              });
+          }
+
+          return newPoints;
+      });
+
+      setUnifiedMenu(null);
   };
 
   const confirmContractions = () => {
@@ -672,6 +628,23 @@ const PartogramPage: React.FC = () => {
                         const intervalHeight = GRAPH_H / 10;
                         const cy = Y_DILATION_10 + (ratio * GRAPH_H) + (intervalHeight / 2);
                         
+                        if (p.variety) {
+                             const varietyObj = VARIETIES.find(v => v.id === p.variety);
+                             const rotation = p.rotation || 0;
+                             const size = 50; // Size for the image
+                             return (
+                                 <image
+                                     key={`s-${i}`}
+                                     href={varietyObj?.src}
+                                     x={cx - size/2}
+                                     y={cy - size/2}
+                                     width={size}
+                                     height={size}
+                                     transform={`rotate(${rotation}, ${cx}, ${cy})`}
+                                 />
+                             );
+                        }
+
                         return <circle key={`s-${i}`} cx={cx} cy={cy} r="25" fill="white" stroke="black" strokeWidth="6" />;
                     })}
 
@@ -832,58 +805,108 @@ const PartogramPage: React.FC = () => {
                  </div>
              )}
 
-             {/* Dilation Menu */}
-             {dilationMenu && dilationMenu.isOpen && (
-                 <div className="absolute bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-50 flex flex-col gap-3"
+             {/* Unified Menu (Dilation + Station) */}
+             {unifiedMenu && unifiedMenu.isOpen && (
+                 <div className="absolute bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-50 flex flex-col gap-4"
                       style={{ 
-                          left: (dilationMenu.x / VIEWBOX_W * 100) + '%', 
-                          top: (dilationMenu.y / VIEWBOX_H * 100) + '%',
+                          left: (unifiedMenu.x / VIEWBOX_W * 100) + '%', 
+                          top: (unifiedMenu.y / VIEWBOX_H * 100) + '%',
                           transform: 'translate(-50%, -100%)',
-                          marginTop: '-10px'
+                          marginTop: '-10px',
+                          minWidth: '300px'
                       }}>
-                      <h3 className="font-bold text-sm text-slate-700 whitespace-nowrap">Dilatação (cm)</h3>
-                      <div className="grid grid-cols-6 gap-1">
-                          {Array.from({length: 11}).map((_, i) => (
-                              <button 
-                                  key={i} 
-                                  onClick={() => setDilationMenu({...dilationMenu, value: i})}
-                                  className={`w-8 h-8 flex items-center justify-center text-xs font-bold rounded border ${dilationMenu.value === i ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                  {i}
-                              </button>
-                          ))}
+                      <div className="flex justify-between items-center border-b pb-2">
+                          <h3 className="font-bold text-sm text-slate-700">Exame (Hora {unifiedMenu.hourIndex + 1})</h3>
+                          <button onClick={() => setUnifiedMenu(null)}><X className="w-4 h-4 text-slate-400 hover:text-slate-600" /></button>
                       </div>
-                      <div className="flex justify-end gap-2 mt-2">
-                          <button onClick={() => setDilationMenu(null)} className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded">Cancelar</button>
-                          <button onClick={() => confirmDilation(dilationMenu.value)} className="px-2 py-1 text-xs bg-slate-900 text-white rounded hover:bg-slate-800">Confirmar</button>
-                      </div>
-                 </div>
-             )}
 
-             {/* Station Menu */}
-             {stationMenu && stationMenu.isOpen && (
-                 <div className="absolute bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-50 flex flex-col gap-3"
-                      style={{ 
-                          left: (stationMenu.x / VIEWBOX_W * 100) + '%', 
-                          top: (stationMenu.y / VIEWBOX_H * 100) + '%',
-                          transform: 'translate(-50%, -100%)',
-                          marginTop: '-10px'
-                      }}>
-                      <h3 className="font-bold text-sm text-slate-700 whitespace-nowrap">De Lee (Plano)</h3>
-                      <div className="grid grid-cols-5 gap-1">
-                          {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map((val) => (
-                              <button 
-                                  key={val} 
-                                  onClick={() => setStationMenu({...stationMenu, value: val})}
-                                  className={`w-8 h-8 flex items-center justify-center text-xs font-bold rounded border ${stationMenu.value === val ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                  {val > 0 ? `+${val}` : val}
-                              </button>
-                          ))}
+                      {/* Dilation Section */}
+                      <div>
+                          <label className="text-xs font-bold text-slate-500 mb-1 block">Dilatação (cm)</label>
+                          <div className="grid grid-cols-6 gap-1">
+                              {Array.from({length: 11}).map((_, i) => (
+                                  <button 
+                                      key={i} 
+                                      onClick={() => setUnifiedMenu({...unifiedMenu, dilation: unifiedMenu.dilation === i ? null : i})}
+                                      className={`w-8 h-8 flex items-center justify-center text-xs font-bold rounded border transition-colors ${unifiedMenu.dilation === i ? 'bg-black text-white border-black' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                                  >
+                                      {i}
+                                  </button>
+                              ))}
+                          </div>
                       </div>
-                      <div className="flex justify-end gap-2 mt-2">
-                          <button onClick={() => setStationMenu(null)} className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded">Cancelar</button>
-                          <button onClick={() => confirmStation(stationMenu.value)} className="px-2 py-1 text-xs bg-slate-900 text-white rounded hover:bg-slate-800">Confirmar</button>
+
+                      {/* Station Section */}
+                      <div>
+                          <label className="text-xs font-bold text-slate-500 mb-1 block">De Lee (Plano)</label>
+                          <div className="grid grid-cols-5 gap-1">
+                              {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map((val) => (
+                                  <button 
+                                      key={val} 
+                                      onClick={() => setUnifiedMenu({...unifiedMenu, station: unifiedMenu.station === val ? null : val})}
+                                      className={`w-8 h-8 flex items-center justify-center text-xs font-bold rounded border transition-colors ${unifiedMenu.station === val ? 'bg-white text-black border-black ring-2 ring-black' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                                  >
+                                      {val > 0 ? `+${val}` : val}
+                                  </button>
+                              ))}
+                          </div>
+                      </div>
+
+                      {/* Variety Section */}
+                      <div>
+                          <label className="text-xs font-bold text-slate-500 mb-1 block">Variedade de Posição</label>
+                          <div className="flex gap-1 mb-2 overflow-x-auto pb-1">
+                              {VARIETIES.map((v) => (
+                                  <button
+                                      key={v.id}
+                                      onClick={() => {
+                                          const newVariety = unifiedMenu.variety === v.id ? undefined : v.id;
+                                          setUnifiedMenu({
+                                              ...unifiedMenu, 
+                                              variety: newVariety,
+                                              rotation: newVariety === 'P' ? 0 : unifiedMenu.rotation
+                                          });
+                                      }}
+                                      className={`w-10 h-10 flex-shrink-0 flex items-center justify-center rounded border transition-colors ${unifiedMenu.variety === v.id ? 'bg-slate-100 border-black ring-2 ring-black' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                                      title={v.label}
+                                  >
+                                      <img src={v.src} alt={v.label} className="w-8 h-8 object-contain" />
+                                  </button>
+                              ))}
+                          </div>
+                          
+                          {unifiedMenu.variety && unifiedMenu.variety !== 'P' && (
+                              <div className="flex flex-col gap-1">
+                                  <label className="text-xs text-slate-500">Rotação:</label>
+                                  <div className="grid grid-cols-8 gap-1">
+                                      {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => {
+                                          const variety = VARIETIES.find(v => v.id === unifiedMenu.variety);
+                                          return (
+                                              <button
+                                                  key={angle}
+                                                  onClick={() => setUnifiedMenu({...unifiedMenu, rotation: angle})}
+                                                  className={`w-8 h-8 flex items-center justify-center rounded border overflow-hidden ${unifiedMenu.rotation === angle ? 'bg-slate-100 border-black ring-2 ring-black' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                                                  title={`${angle}°`}
+                                              >
+                                                  {variety && (
+                                                      <img 
+                                                          src={variety.src} 
+                                                          alt={`${angle}°`} 
+                                                          style={{ transform: `rotate(${angle}deg)` }} 
+                                                          className="w-6 h-6 object-contain" 
+                                                      />
+                                                  )}
+                                              </button>
+                                          );
+                                      })}
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+
+                      <div className="flex justify-end gap-2 mt-2 pt-2 border-t">
+                          <button onClick={() => setUnifiedMenu(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded font-medium">Cancelar</button>
+                          <button onClick={confirmUnified} className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded hover:bg-slate-800 font-bold shadow-sm">Confirmar</button>
                       </div>
                  </div>
              )}
