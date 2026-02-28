@@ -293,7 +293,7 @@ const AdmissionForm: React.FC = () => {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Idade</label>
-            <input required name="age" type="number" className="w-full p-3 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none" value={formData.age} onChange={handleChange} />
+            <input required name="age" type="text" inputMode="numeric" pattern="[0-9]*" className="w-full p-3 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none" value={formData.age} onChange={handleChange} />
           </div>
           <div>
              <label className="block text-sm font-medium text-slate-700 mb-1">Tipo Sang.</label>
@@ -315,11 +315,11 @@ const AdmissionForm: React.FC = () => {
           <div className="col-span-2 font-medium text-slate-700 text-sm">Idade Gestacional</div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Semanas</label>
-            <input required name="weeks" type="number" className="w-full p-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none" value={formData.weeks} onChange={handleChange} />
+            <input required name="weeks" type="text" inputMode="numeric" pattern="[0-9]*" className="w-full p-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none" value={formData.weeks} onChange={handleChange} />
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Dias</label>
-            <input required name="days" type="number" className="w-full p-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none" value={formData.days} onChange={handleChange} />
+            <input required name="days" type="text" inputMode="numeric" pattern="[0-9]*" className="w-full p-2 border border-slate-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-medical-500 focus:outline-none" value={formData.days} onChange={handleChange} />
           </div>
           <div className="col-span-2">
             <label className="block text-xs text-slate-500 mb-1">Paridade</label>

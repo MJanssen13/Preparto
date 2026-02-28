@@ -130,11 +130,48 @@ const PartogramPage: React.FC = () => {
       strong: number;
   } | null>(null);
 
+  // BCF Menu State
+  const [bcfMenu, setBcfMenu] = useState<{
+      isOpen: boolean;
+      x: number;
+      y: number;
+      clientX: number;
+      clientY: number;
+      readings: { value: number | ''; minutes: number | '' }[];
+      hourIndex: number;
+  } | null>(null);
+
   const formatBloodType = (value: string) => {
       let formatted = value.toUpperCase();
       formatted = formatted.replace(/\+/g, ' POSITIVO');
       formatted = formatted.replace(/-/g, ' NEGATIVO');
       return formatted;
+  };
+
+  // Helper for menu positioning - Uses absolute positioning relative to the graph container
+  const getMenuStyle = (x: number, y: number) => {
+      // Convert visual coordinates to percentages of the VIEWBOX
+      const xPerc = (x / VIEWBOX_W) * 100;
+      const yPerc = (y / VIEWBOX_H) * 100;
+      
+      const isRight = xPerc > 50;
+      const isBottom = yPerc > 50;
+      
+      return {
+          position: 'absolute' as const,
+          left: isRight ? 'auto' : `${xPerc}%`,
+          right: isRight ? `${100 - xPerc}%` : 'auto',
+          top: isBottom ? 'auto' : `${yPerc}%`,
+          bottom: isBottom ? `${100 - yPerc}%` : 'auto',
+          // Add margin to offset from the click point
+          marginLeft: isRight ? 0 : '10px',
+          marginRight: isRight ? '10px' : 0,
+          marginTop: isBottom ? 0 : '10px',
+          marginBottom: isBottom ? '10px' : 0,
+          zIndex: 50,
+          maxHeight: '300px',
+          overflowY: 'auto' as const
+      };
   };
 
   useEffect(() => {
@@ -312,14 +349,48 @@ const PartogramPage: React.FC = () => {
           const bpm = Math.round(rawVal / 5) * 5; 
           
           if (bpm >= 80 && bpm <= 180) {
-              const existingIndex = points.findIndex(p => Math.abs(p.x - fractionalX) < 0.1 && p.type === 'fcf');
-              if (existingIndex >= 0) {
-                  const newPoints = [...points];
-                  newPoints[existingIndex].y = bpm;
-                  setPoints(newPoints);
-              } else {
-                  setPoints(prev => [...prev, { x: fractionalX, y: bpm, type: 'fcf' }]);
+              // Open BCF Menu
+              // Find all existing points for this hour
+              const existingPoints = points.filter(p => Math.floor(p.x) === hourIndex && p.type === 'fcf');
+              
+              // Create readings array
+              const readings = existingPoints.map(p => ({
+                  value: p.y as number | '',
+                  minutes: Math.round((p.x - hourIndex) * 60) as number | ''
+              }));
+              
+              // Calculate clicked minutes (snapped to 5)
+              const rawMinutes = (colRaw - hourIndex) * 60;
+              const clickedMinutes = Math.round(rawMinutes / 5) * 5;
+              
+              // Check if we should add the clicked point
+              const existingAtClick = readings.find(r => Math.abs((r.minutes as number) - clickedMinutes) < 3);
+              
+              if (!existingAtClick && readings.length < 4) {
+                  readings.push({ value: bpm, minutes: clickedMinutes });
               }
+              
+              // Sort by minutes
+              readings.sort((a, b) => {
+                  if (a.minutes === '') return 1;
+                  if (b.minutes === '') return -1;
+                  return (a.minutes as number) - (b.minutes as number);
+              });
+              
+              // Fill up to 4 slots
+              while (readings.length < 4) {
+                  readings.push({ value: '', minutes: '' });
+              }
+
+              setBcfMenu({
+                  isOpen: true,
+                  x: visualClickX,
+                  y: visualClickY,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                  readings,
+                  hourIndex: hourIndex
+              });
           }
       }
 
@@ -354,6 +425,34 @@ const PartogramPage: React.FC = () => {
               });
           }
       }
+  };
+
+  const confirmBcf = () => {
+      if (!bcfMenu) return;
+      const { hourIndex, readings } = bcfMenu;
+      
+      setPoints(prev => {
+          // Remove existing points for this hour
+          const otherPoints = prev.filter(p => !(Math.floor(p.x) === hourIndex && p.type === 'fcf'));
+          const newPoints: PartogramPoint[] = [];
+          
+          readings.forEach(r => {
+              if (r.value !== '' && r.minutes !== '') {
+                  const val = Number(r.value);
+                  const mins = Number(r.minutes);
+                  if (!isNaN(val) && !isNaN(mins)) {
+                       // Ensure minutes is within 0-59
+                       const validMins = Math.min(59, Math.max(0, mins));
+                       const x = hourIndex + (validMins / 60);
+                       newPoints.push({ x, y: val, type: 'fcf' });
+                  }
+              }
+          });
+          
+          return [...otherPoints, ...newPoints];
+      });
+      
+      setBcfMenu(null);
   };
 
   const confirmUnified = () => {
@@ -595,7 +694,7 @@ const PartogramPage: React.FC = () => {
                     <foreignObject x="480" y="1080" width="700" height="60">
                         <input value={headerData.parity} onChange={e => handleHeaderChange('parity', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
                     </foreignObject>
-                    <foreignObject x="1550" y="1080" width="100" height="60">
+                    <foreignObject x="1450" y="1080" width="300" height="60">
                         <input value={headerData.bloodType} onChange={e => handleHeaderChange('bloodType', e.target.value)} onBlur={handleBloodTypeBlur} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
                     </foreignObject>
                     <foreignObject x="1750" y="1080" width="500" height="60">
@@ -796,32 +895,24 @@ const PartogramPage: React.FC = () => {
 
              {/* Contraction Menu */}
              {contractionMenu && contractionMenu.isOpen && (
-                 <div className="absolute bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-50 flex flex-col gap-3"
-                      style={{ 
-                          position: 'fixed',
-                          left: contractionMenu.clientX, 
-                          top: contractionMenu.clientY,
-                          transform: `${contractionMenu.clientX > window.innerWidth / 2 ? 'translateX(-100%)' : ''} ${contractionMenu.clientY > window.innerHeight / 2 ? 'translateY(-100%)' : ''}`,
-                          marginTop: contractionMenu.clientY > window.innerHeight / 2 ? '-10px' : '10px',
-                          marginLeft: contractionMenu.clientX > window.innerWidth / 2 ? '-10px' : '10px',
-                          zIndex: 9999
-                      }}>
+                 <div className="bg-white p-4 rounded-lg shadow-xl border border-slate-200 flex flex-col gap-3"
+                      style={getMenuStyle(contractionMenu.x, contractionMenu.y)}>
                       <h3 className="font-bold text-sm text-slate-700 whitespace-nowrap">Contrações (Hora {contractionMenu.hourIndex + 1})</h3>
                       
                       <div className="flex items-center gap-2">
                           <div className="w-4 h-4 border border-black flex items-center justify-center"><X className="w-3 h-3" /></div>
                           <label className="text-xs w-16">Fraca</label>
-                          <input type="number" min="0" max="5" value={contractionMenu.weak} onChange={e => setContractionMenu({...contractionMenu, weak: Math.min(5, Math.max(0, parseInt(e.target.value)||0))})} className="w-12 border rounded p-1 text-xs" />
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" value={contractionMenu.weak} onChange={e => setContractionMenu({...contractionMenu, weak: Math.min(5, Math.max(0, parseInt(e.target.value)||0))})} className="w-12 border rounded p-1 text-xs" />
                       </div>
                       <div className="flex items-center gap-2">
                           <div className="w-4 h-4 border border-slate-700 relative overflow-hidden"><div className="absolute inset-0 bg-slate-400" style={{clipPath:'polygon(0 0, 100% 0, 0 100%)'}}></div></div>
                           <label className="text-xs w-16">Média</label>
-                          <input type="number" min="0" max="5" value={contractionMenu.moderate} onChange={e => setContractionMenu({...contractionMenu, moderate: Math.min(5, Math.max(0, parseInt(e.target.value)||0))})} className="w-12 border rounded p-1 text-xs" />
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" value={contractionMenu.moderate} onChange={e => setContractionMenu({...contractionMenu, moderate: Math.min(5, Math.max(0, parseInt(e.target.value)||0))})} className="w-12 border rounded p-1 text-xs" />
                       </div>
                       <div className="flex items-center gap-2">
                           <div className="w-4 h-4 bg-black border border-black"></div>
                           <label className="text-xs w-16">Forte</label>
-                          <input type="number" min="0" max="5" value={contractionMenu.strong} onChange={e => setContractionMenu({...contractionMenu, strong: Math.min(5, Math.max(0, parseInt(e.target.value)||0))})} className="w-12 border rounded p-1 text-xs" />
+                          <input type="text" inputMode="numeric" pattern="[0-9]*" value={contractionMenu.strong} onChange={e => setContractionMenu({...contractionMenu, strong: Math.min(5, Math.max(0, parseInt(e.target.value)||0))})} className="w-12 border rounded p-1 text-xs" />
                       </div>
                       
                       <div className="flex justify-end gap-2 mt-2">
@@ -833,17 +924,8 @@ const PartogramPage: React.FC = () => {
 
              {/* Unified Menu (Dilation + Station) */}
              {unifiedMenu && unifiedMenu.isOpen && (
-                 <div className="absolute bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-50 flex flex-col gap-4"
-                      style={{ 
-                          position: 'fixed',
-                          left: unifiedMenu.clientX, 
-                          top: unifiedMenu.clientY,
-                          transform: `${unifiedMenu.clientX > window.innerWidth / 2 ? 'translateX(-100%)' : ''} ${unifiedMenu.clientY > window.innerHeight / 2 ? 'translateY(-100%)' : ''}`,
-                          marginTop: unifiedMenu.clientY > window.innerHeight / 2 ? '-10px' : '10px',
-                          marginLeft: unifiedMenu.clientX > window.innerWidth / 2 ? '-10px' : '10px',
-                          minWidth: '300px',
-                          zIndex: 9999
-                      }}>
+                 <div className="bg-white p-4 rounded-lg shadow-xl border border-slate-200 flex flex-col gap-4"
+                      style={{...getMenuStyle(unifiedMenu.x, unifiedMenu.y), minWidth: '300px'}}>
                       <div className="flex justify-between items-center border-b pb-2">
                           <h3 className="font-bold text-sm text-slate-700">Exame (Hora {unifiedMenu.hourIndex + 1})</h3>
                           <button onClick={() => setUnifiedMenu(null)}><X className="w-4 h-4 text-slate-400 hover:text-slate-600" /></button>
@@ -936,6 +1018,62 @@ const PartogramPage: React.FC = () => {
                       <div className="flex justify-end gap-2 mt-2 pt-2 border-t">
                           <button onClick={() => setUnifiedMenu(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded font-medium">Cancelar</button>
                           <button onClick={confirmUnified} className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded hover:bg-slate-800 font-bold shadow-sm">Confirmar</button>
+                      </div>
+                 </div>
+             )}
+
+             {/* BCF Menu */}
+             {bcfMenu && bcfMenu.isOpen && (
+                 <div className="bg-white p-4 rounded-lg shadow-xl border border-slate-200 flex flex-col gap-4"
+                      style={{...getMenuStyle(bcfMenu.x, bcfMenu.y), maxHeight: 'none', overflowY: 'visible'}}>
+                      <div className="flex justify-between items-center border-b pb-2">
+                          <h3 className="font-bold text-sm text-slate-700">BCF (Hora {bcfMenu.hourIndex + 1})</h3>
+                          <button onClick={() => setBcfMenu(null)}><X className="w-4 h-4 text-slate-400 hover:text-slate-600" /></button>
+                      </div>
+                      
+                      <div className="flex flex-col gap-2">
+                          <div className="grid grid-cols-[1fr_1fr] gap-2 text-xs font-bold text-slate-500 mb-1">
+                              <span>Valor (bpm)</span>
+                              <span>Minuto</span>
+                          </div>
+                          
+                          {bcfMenu.readings.map((reading, idx) => (
+                              <div key={idx} className="flex gap-2 items-center">
+                                  <input 
+                                      type="text" 
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
+                                      value={reading.value} 
+                                      onChange={e => {
+                                          const newReadings = [...bcfMenu.readings];
+                                          const val = e.target.value.replace(/[^0-9]/g, '');
+                                          newReadings[idx].value = val === '' ? '' : parseInt(val);
+                                          setBcfMenu({...bcfMenu, readings: newReadings});
+                                      }}
+                                      className="border rounded p-2 text-sm w-20"
+                                      placeholder="-"
+                                  />
+                                  <select 
+                                      value={reading.minutes} 
+                                      onChange={e => {
+                                          const newReadings = [...bcfMenu.readings];
+                                          newReadings[idx].minutes = e.target.value === '' ? '' : parseInt(e.target.value);
+                                          setBcfMenu({...bcfMenu, readings: newReadings});
+                                      }}
+                                      className="border rounded p-2 text-sm w-24"
+                                  >
+                                      <option value="">-</option>
+                                      {Array.from({length: 12}).map((_, i) => (
+                                          <option key={i} value={i * 5}>{i * 5}</option>
+                                      ))}
+                                  </select>
+                              </div>
+                          ))}
+                      </div>
+
+                      <div className="flex justify-end gap-2 mt-2">
+                          <button onClick={() => setBcfMenu(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded">Cancelar</button>
+                          <button onClick={confirmBcf} className="px-3 py-1.5 text-xs bg-slate-900 text-white rounded hover:bg-slate-800">Confirmar</button>
                       </div>
                  </div>
              )}

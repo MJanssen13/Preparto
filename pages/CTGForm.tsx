@@ -271,7 +271,9 @@ const CTGForm: React.FC = () => {
                 <label className="block text-sm font-bold text-slate-700 mb-2">Linha de Base (BPM)</label>
                 <div className="flex items-center gap-3">
                     <input 
-                        type="number" 
+                        type="text" 
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         placeholder="Ex: 140"
                         className="w-24 p-3 border border-slate-300 bg-white text-slate-900 rounded-lg text-lg font-bold text-center focus:outline-none focus:ring-2 focus:ring-pink-500"
                         value={formData.baseline}

@@ -444,34 +444,34 @@ const ObservationForm: React.FC = () => {
                     {activeParams.includes('PA') && (
                         <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
                             <div className="col-span-3 text-xs font-bold text-slate-700 mb-1">Pressão Arterial (mmHg)</div>
-                            <input name="paSys" type="number" placeholder="Sys" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paSys} onChange={handleChange} />
+                            <input name="paSys" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Sys" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paSys} onChange={handleChange} />
                             <span className="pb-3 font-bold text-slate-400">x</span>
-                            <input name="paDia" type="number" placeholder="Dia" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paDia} onChange={handleChange} />
+                            <input name="paDia" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Dia" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paDia} onChange={handleChange} />
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
                         {activeParams.includes('FC') && (
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Frequência Cardíaca (bpm)</label>
-                                <input name="fc" type="number" placeholder="80" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.fc} onChange={handleChange} />
+                                <input name="fc" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="80" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.fc} onChange={handleChange} />
                             </div>
                         )}
                         {activeParams.includes('TAX') && (
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Temperatura</label>
-                                <input name="tax" type="number" step="0.1" placeholder="36.5" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.tax} onChange={handleChange} />
+                                <input name="tax" type="text" inputMode="decimal" placeholder="36.5" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.tax} onChange={handleChange} />
                             </div>
                         )}
                         {activeParams.includes('Sat') && (
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1">Saturação (%)</label>
-                                <input name="spo2" type="number" placeholder="98" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.spo2} onChange={handleChange} />
+                                <input name="spo2" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="98" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.spo2} onChange={handleChange} />
                             </div>
                         )}
                         {activeParams.includes('DXT') && (
                             <div>
                                 <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center gap-1"><Droplet className="w-3 h-3" /> Glicemia (mg/dL)</label>
-                                <input name="dxt" type="number" placeholder="98" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.dxt} onChange={handleChange} />
+                                <input name="dxt" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="98" className="w-full p-3 border border-slate-300 rounded-lg" value={formData.dxt} onChange={handleChange} />
                             </div>
                         )}
                     </div>
@@ -487,7 +487,7 @@ const ObservationForm: React.FC = () => {
                     {activeParams.includes('BCF') && (
                         <div className="bg-rose-50 p-4 rounded-xl">
                             <label className="block text-sm font-bold text-rose-800 mb-2">BCF (bpm)</label>
-                            <input name="bcf" type="number" className="w-full p-4 border border-rose-200 rounded-xl text-3xl font-bold text-rose-600 bg-white text-center focus:ring-2 focus:ring-rose-500 focus:outline-none" placeholder="-" value={formData.bcf} onChange={handleChange} />
+                            <input name="bcf" type="text" inputMode="numeric" pattern="[0-9]*" className="w-full p-4 border border-rose-200 rounded-xl text-3xl font-bold text-rose-600 bg-white text-center focus:ring-2 focus:ring-rose-500 focus:outline-none" placeholder="-" value={formData.bcf} onChange={handleChange} />
                         </div>
                     )}
                     {activeParams.includes('Dinâmica') && (
@@ -618,7 +618,7 @@ const ObservationForm: React.FC = () => {
                         <label className="block text-xs font-medium text-slate-500 mb-1">Dilatação (cm)</label>
                         <div className="flex items-center gap-2">
                            <input name="dilation" type="range" min="0" max="10" step="1" className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" value={formData.dilation || 0} onChange={handleChange} />
-                           <input name="dilation" type="number" className="w-16 p-2 border border-slate-300 rounded-lg text-center font-bold" value={formData.dilation} onChange={handleChange} />
+                           <input name="dilation" type="text" inputMode="numeric" pattern="[0-9]*" className="w-16 p-2 border border-slate-300 rounded-lg text-center font-bold" value={formData.dilation} onChange={handleChange} />
                         </div>
                         
                         {/* Se dilatação for 0 ou vazia, mostrar detalhes de colo fechado */}
@@ -645,7 +645,7 @@ const ObservationForm: React.FC = () => {
                         <label className="block text-xs font-medium text-slate-500 mb-1">Apagamento (%)</label>
                         <div className="flex items-center gap-2">
                            <input name="effacement" type="range" min="0" max="100" step="10" className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" value={formData.effacement || 0} onChange={handleChange} />
-                           <input name="effacement" type="number" className="w-16 p-2 border border-slate-300 rounded-lg text-center font-bold" value={formData.effacement} onChange={handleChange} />
+                           <input name="effacement" type="text" inputMode="numeric" pattern="[0-9]*" className="w-16 p-2 border border-slate-300 rounded-lg text-center font-bold" value={formData.effacement} onChange={handleChange} />
                         </div>
                         <p className="text-[10px] text-slate-400 mt-1">0% = Grosso (G)</p>
                     </div>
@@ -745,7 +745,7 @@ const ObservationForm: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-xs font-medium text-purple-800 mb-1">Ocitocina (ml/h)</label>
-                        <input name="oxy" type="number" placeholder="0" className="w-full p-3 border border-purple-200 rounded-lg bg-white" value={formData.oxy} onChange={handleChange} />
+                        <input name="oxy" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="0" className="w-full p-3 border border-purple-200 rounded-lg bg-white" value={formData.oxy} onChange={handleChange} />
                     </div>
                     <div>
                         <label className="block text-xs font-medium text-purple-800 mb-1">Misoprostol</label>
@@ -753,7 +753,9 @@ const ObservationForm: React.FC = () => {
                             <div className="w-16 relative">
                                 <input 
                                     name="misoCount"
-                                    type="number" 
+                                    type="text" 
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
                                     placeholder="Nº" 
                                     className="w-full p-3 border border-purple-200 rounded-lg bg-white text-center" 
                                     value={formData.misoCount} 
