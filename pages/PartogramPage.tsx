@@ -536,7 +536,11 @@ const PartogramPage: React.FC = () => {
                      To change the background, upload a high-res PNG (2481x3508) to the public folder 
                      and name it 'partograma.png'. 
                  */}
-                 <image href="/partograma.png" width="2481" height="3508" preserveAspectRatio="none" />
+                 {/* 
+                  IMPORTANT: The background image 'partograma.png' is managed by the user.
+                  DO NOT overwrite or modify 'public/partograma.png' in future updates.
+                */}
+                <image href="/partograma.png" width="2481" height="3508" preserveAspectRatio="none" />
 
                  {/* MAIN TRANSFORM GROUP */}
                  <g transform="matrix(1.04175,0,0,1.04175,-50.052284,-610.189202)">
