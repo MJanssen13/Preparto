@@ -109,6 +109,8 @@ const PartogramPage: React.FC = () => {
       hourIndex: number;
       x: number;
       y: number;
+      clientX: number;
+      clientY: number;
       dilation: number | null;
       station: number | null;
       variety: string | undefined;
@@ -121,10 +123,19 @@ const PartogramPage: React.FC = () => {
       hourIndex: number;
       x: number;
       y: number;
+      clientX: number;
+      clientY: number;
       weak: number;
       moderate: number;
       strong: number;
   } | null>(null);
+
+  const formatBloodType = (value: string) => {
+      let formatted = value.toUpperCase();
+      formatted = formatted.replace(/\+/g, ' POSITIVO');
+      formatted = formatted.replace(/-/g, ' NEGATIVO');
+      return formatted;
+  };
 
   useEffect(() => {
     if (id) {
@@ -142,7 +153,7 @@ const PartogramPage: React.FC = () => {
                     ig: `${p.gestationalAgeWeeks}s ${p.gestationalAgeDays}d`,
                     us: '',
                     parity: p.parity || '',
-                    bloodType: p.bloodType || '',
+                    bloodType: p.bloodType ? formatBloodType(p.bloodType) : '',
                     babyName: p.babyName || '',
                     startDate: new Date().getDate().toString() // Just the day
                 });
@@ -197,6 +208,10 @@ const PartogramPage: React.FC = () => {
 
   const handleHeaderChange = (field: keyof typeof headerData, value: string) => {
       setHeaderData(prev => ({ ...prev, [field]: value.toUpperCase() }));
+  };
+
+  const handleBloodTypeBlur = () => {
+      setHeaderData(prev => ({ ...prev, bloodType: formatBloodType(prev.bloodType) }));
   };
 
   const handleSave = async () => {
@@ -272,6 +287,8 @@ const PartogramPage: React.FC = () => {
                   hourIndex,
                   x: visualClickX,
                   y: visualClickY,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
                   dilation: existingDilation ? existingDilation.y : null,
                   station: existingStation ? (6 - existingStation.y) : null, // Reverse mapping: y = 6 - val => val = 6 - y
                   variety: existingStation?.variety,
@@ -329,6 +346,8 @@ const PartogramPage: React.FC = () => {
                   hourIndex,
                   x: visualClickX,
                   y: visualClickY,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
                   weak,
                   moderate,
                   strong
@@ -577,7 +596,7 @@ const PartogramPage: React.FC = () => {
                         <input value={headerData.parity} onChange={e => handleHeaderChange('parity', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
                     </foreignObject>
                     <foreignObject x="1550" y="1080" width="100" height="60">
-                        <input value={headerData.bloodType} onChange={e => handleHeaderChange('bloodType', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input value={headerData.bloodType} onChange={e => handleHeaderChange('bloodType', e.target.value)} onBlur={handleBloodTypeBlur} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
                     </foreignObject>
                     <foreignObject x="1750" y="1080" width="500" height="60">
                         <input value={headerData.babyName} onChange={e => handleHeaderChange('babyName', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
@@ -779,10 +798,13 @@ const PartogramPage: React.FC = () => {
              {contractionMenu && contractionMenu.isOpen && (
                  <div className="absolute bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-50 flex flex-col gap-3"
                       style={{ 
-                          left: (contractionMenu.x / VIEWBOX_W * 100) + '%', 
-                          top: (contractionMenu.y / VIEWBOX_H * 100) + '%',
-                          transform: 'translate(-50%, -100%)',
-                          marginTop: '-10px'
+                          position: 'fixed',
+                          left: contractionMenu.clientX, 
+                          top: contractionMenu.clientY,
+                          transform: `${contractionMenu.clientX > window.innerWidth / 2 ? 'translateX(-100%)' : ''} ${contractionMenu.clientY > window.innerHeight / 2 ? 'translateY(-100%)' : ''}`,
+                          marginTop: contractionMenu.clientY > window.innerHeight / 2 ? '-10px' : '10px',
+                          marginLeft: contractionMenu.clientX > window.innerWidth / 2 ? '-10px' : '10px',
+                          zIndex: 9999
                       }}>
                       <h3 className="font-bold text-sm text-slate-700 whitespace-nowrap">Contrações (Hora {contractionMenu.hourIndex + 1})</h3>
                       
@@ -813,11 +835,14 @@ const PartogramPage: React.FC = () => {
              {unifiedMenu && unifiedMenu.isOpen && (
                  <div className="absolute bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-50 flex flex-col gap-4"
                       style={{ 
-                          left: (unifiedMenu.x / VIEWBOX_W * 100) + '%', 
-                          top: (unifiedMenu.y / VIEWBOX_H * 100) + '%',
-                          transform: 'translate(-50%, -100%)',
-                          marginTop: '-10px',
-                          minWidth: '300px'
+                          position: 'fixed',
+                          left: unifiedMenu.clientX, 
+                          top: unifiedMenu.clientY,
+                          transform: `${unifiedMenu.clientX > window.innerWidth / 2 ? 'translateX(-100%)' : ''} ${unifiedMenu.clientY > window.innerHeight / 2 ? 'translateY(-100%)' : ''}`,
+                          marginTop: unifiedMenu.clientY > window.innerHeight / 2 ? '-10px' : '10px',
+                          marginLeft: unifiedMenu.clientX > window.innerWidth / 2 ? '-10px' : '10px',
+                          minWidth: '300px',
+                          zIndex: 9999
                       }}>
                       <div className="flex justify-between items-center border-b pb-2">
                           <h3 className="font-bold text-sm text-slate-700">Exame (Hora {unifiedMenu.hourIndex + 1})</h3>
