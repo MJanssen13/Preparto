@@ -54,23 +54,39 @@ const PatientDetails: React.FC = () => {
       // Helper helper for Toque inside generator
       const getToqueText = (o: Observation['obstetric']) => {
           const parts = [];
-          const fetalMap: Record<string, string> = { 'Cefálico': 'CEF', 'Pélvico': 'PELV', 'Córmico': 'CORM' };
-          if (o.fetalPosition && fetalMap[o.fetalPosition]) parts.push(fetalMap[o.fetalPosition]);
+          
+          // 1. Apagamento
           if (o.effacement !== undefined) parts.push(o.effacement === 0 ? 'G' : `${o.effacement}% AP`);
+          
+          // 2. Posição do Colo
           const posMap: Record<string, string> = { 'Posterior': 'P', 'Intermediário': 'I', 'Central': 'C' };
           if (o.cervixPosition && posMap[o.cervixPosition]) parts.push(posMap[o.cervixPosition]);
+          
+          // 3. Consistência
           const conMap: Record<string, string> = { 'Nasal': 'N', 'Nasolabial': 'NL', 'Labial': 'L' };
           if (o.cervixConsistency && conMap[o.cervixConsistency]) parts.push(conMap[o.cervixConsistency]);
           
+          // 4. Dilatação
           if (o.dilation !== undefined && o.dilation > 0) parts.push(`${o.dilation}CM`);
           else if (o.cervixStatus && o.cervixStatus.length > 0) parts.push(o.cervixStatus.join(', '));
           else if (o.dilation === 0) parts.push('0CM');
 
+          // 5. Apresentação
+          const fetalMap: Record<string, string> = { 'Cefálico': 'CEF', 'Pélvico': 'PELV', 'Córmico': 'CORM' };
+          if (o.fetalPosition && fetalMap[o.fetalPosition]) parts.push(fetalMap[o.fetalPosition]);
+
+          // 6. De Lee
           if (o.station !== undefined) {
                if (o.station === -4) parts.push('AM');
                else parts.push(`DE LEE ${o.station > 0 ? '+' : ''}${o.station}`);
           }
+          
+          // 7. Bolsa
+          if (o.membranes) parts.push(o.membranes.toUpperCase());
+
+          // 8. SDL
           if (o.bloodOnGlove !== undefined) parts.push(o.bloodOnGlove ? 'SDL' : 'SSDL');
+          
           if (o.cervixObservation) parts.push(`OBS: ${o.cervixObservation}`);
           
           return parts.length > 0 ? `TOQUE: ${parts.join(', ')}` : '';
@@ -485,38 +501,52 @@ const PatientDetails: React.FC = () => {
       )}
 
       {/* Next Observations List (Only if not resolved) */}
-      {!isResolved && pendingTasks.length > 0 && (
+      {!isResolved && (
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 relative overflow-hidden">
-           <div className="flex items-center gap-2 text-blue-800 font-bold text-sm mb-3">
-             <Clock className="w-4 h-4" />
-             Próximas Avaliações
+           <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-blue-800 font-bold text-sm">
+                <Clock className="w-4 h-4" />
+                Próximas Avaliações
+              </div>
+              <Link 
+                 to={`/patient/${id}/new-schedule`}
+                 className="text-[10px] bg-white text-blue-600 hover:bg-blue-50 px-2 py-1 rounded border border-blue-200 font-bold shadow-sm transition-colors flex items-center gap-1"
+              >
+                 <Plus className="w-3 h-3" /> Nova Rotina
+              </Link>
            </div>
            
-           <div className="space-y-2">
-              {pendingTasks.slice(0, 3).map(task => (
-                <Link 
-                  key={task.id} 
-                  to={`/patient/${id}/add-observation?taskId=${task.id}`}
-                  className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-blue-100 hover:bg-white hover:shadow-sm transition-all active:scale-[0.98] cursor-pointer"
-                >
-                   <div className="font-bold text-slate-700">
-                     {new Date(task.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                   </div>
-                   <div className="flex gap-1">
-                      {task.focus.map(f => (
-                          <span key={f} className="text-[10px] bg-white border border-blue-200 text-blue-600 px-1.5 py-0.5 rounded">
-                              {f}
-                          </span>
-                      ))}
-                   </div>
-                </Link>
-              ))}
-              {pendingTasks.length > 3 && (
-                  <div className="text-center text-xs text-blue-400 font-medium pt-1">
-                      + {pendingTasks.length - 3} agendadas
-                  </div>
-              )}
-           </div>
+           {pendingTasks.length > 0 ? (
+              <div className="space-y-2">
+                 {pendingTasks.slice(0, 3).map(task => (
+                   <Link 
+                     key={task.id} 
+                     to={`/patient/${id}/add-observation?taskId=${task.id}`}
+                     className="flex justify-between items-center bg-white/60 p-2 rounded-lg border border-blue-100 hover:bg-white hover:shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+                   >
+                      <div className="font-bold text-slate-700">
+                        {new Date(task.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </div>
+                      <div className="flex gap-1">
+                         {task.focus.map(f => (
+                             <span key={f} className="text-[10px] bg-white border border-blue-200 text-blue-600 px-1.5 py-0.5 rounded">
+                                 {f}
+                             </span>
+                         ))}
+                      </div>
+                   </Link>
+                 ))}
+                 {pendingTasks.length > 3 && (
+                     <div className="text-center text-xs text-blue-400 font-medium pt-1">
+                         + {pendingTasks.length - 3} agendadas
+                     </div>
+                 )}
+              </div>
+           ) : (
+              <div className="text-center py-2 text-xs text-blue-400 italic">
+                  Nenhuma avaliação agendada.
+              </div>
+           )}
         </div>
       )}
 
@@ -560,12 +590,20 @@ const PatientDetails: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <h3 className="font-bold text-slate-700">Evolução Clínica</h3>
-          <Link 
-            to={`/patient/${id}/bulk-observations`}
-            className="text-xs flex items-center gap-1 text-medical-600 hover:text-medical-700 font-bold bg-medical-50 hover:bg-medical-100 px-2 py-1 rounded transition-colors"
-          >
-            <Plus className="w-3 h-3" /> Adicionar Lote
-          </Link>
+          <div className="flex gap-2">
+            <Link 
+              to={`/patient/${id}/bulk-edit-observations`}
+              className="text-xs flex items-center gap-1 text-slate-600 hover:text-slate-700 font-bold bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded transition-colors border border-slate-200"
+            >
+              <Edit2 className="w-3 h-3" /> Editar Lote
+            </Link>
+            <Link 
+              to={`/patient/${id}/bulk-observations`}
+              className="text-xs flex items-center gap-1 text-medical-600 hover:text-medical-700 font-bold bg-medical-50 hover:bg-medical-100 px-2 py-1 rounded transition-colors"
+            >
+              <Plus className="w-3 h-3" /> Adicionar Lote
+            </Link>
+          </div>
         </div>
         {timelineItems.length === 0 ? (
           <div className="text-center py-8 text-slate-400 bg-white rounded-xl">
@@ -579,9 +617,14 @@ const PatientDetails: React.FC = () => {
                  return (
                     <div key={`ctg-${ctg.id}`} className="bg-pink-50 rounded-xl border border-pink-100 shadow-sm p-4 relative group animate-in fade-in">
                          <div className="absolute top-4 right-4 flex items-center gap-3">
-                             <span className="text-xl font-bold text-pink-700 tracking-tight">
-                                 {new Date(ctg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                             </span>
+                             <div className="flex flex-col items-end">
+                                 <span className="text-[10px] font-bold text-pink-400 uppercase">
+                                     {new Date(ctg.timestamp).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}
+                                 </span>
+                                 <span className="text-xl font-bold text-pink-700 tracking-tight">
+                                     {new Date(ctg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                 </span>
+                             </div>
                              <Link 
                                 to={`/patient/${id}/edit-ctg/${ctg.id}`}
                                 className="p-1.5 text-pink-300 hover:text-pink-600 hover:bg-pink-100 rounded-full transition-colors"
@@ -654,9 +697,14 @@ const PatientDetails: React.FC = () => {
              return (
               <div key={`obs-${obs.id}`} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 relative group">
                  <div className="absolute top-4 right-4 flex items-center gap-3">
-                   <span className="text-xl font-bold text-slate-700 tracking-tight">
-                     {new Date(obs.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                   </span>
+                   <div className="flex flex-col items-end">
+                     <span className="text-[10px] font-bold text-slate-400 uppercase">
+                       {new Date(obs.timestamp).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}
+                     </span>
+                     <span className="text-xl font-bold text-slate-700 tracking-tight">
+                       {new Date(obs.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                     </span>
+                   </div>
                    {/* Allow editing observations even if resolved, for correction */}
                    <Link 
                     to={`/patient/${id}/edit-observation/${obs.id}`}

@@ -104,6 +104,7 @@ export interface CTG {
   score: number; // 0-5 pts
   conclusion: string; // Feto ativo, hipoativo, inativo, reativo...
   notes?: string;
+  image?: string; // Base64 encoded image
 }
 
 // --- PARTOGRAM TYPES ---

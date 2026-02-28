@@ -183,7 +183,8 @@ const mapCTGToDB = (c: Partial<CTG>) => {
       ...(c.stimulusCount && { stimulus_count: c.stimulusCount }),
       ...(c.score !== undefined && { score: c.score }),
       ...(c.conclusion && { conclusion: c.conclusion }),
-      ...(c.notes && { notes: c.notes })
+      ...(c.notes && { notes: c.notes }),
+      ...(c.image && { image: c.image })
   };
 };
 
@@ -204,7 +205,8 @@ const mapCTGFromDB = (db: any): CTG => {
       stimulusCount: db.stimulus_count,
       score: db.score,
       conclusion: db.conclusion,
-      notes: db.notes
+      notes: db.notes,
+      image: db.image
   };
 };
 

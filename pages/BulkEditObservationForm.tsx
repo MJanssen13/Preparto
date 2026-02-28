@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { Patient, Observation, MembraneStatus } from '../types';
-import { ArrowLeft, Save, Plus, Trash2, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, AlertCircle } from 'lucide-react';
 
 interface BulkRow {
   id: string;
+  originalId?: string; // To track if it's an existing observation
   date: string;
   time: string;
   bcf: string;
@@ -18,7 +19,7 @@ interface BulkRow {
   tax: string;
   spo2: string;
   dxt: string;
-  dilationCombined: string; // Merged column
+  dilationCombined: string;
   effacement: string;
   station: string;
   cervixPosition: string;
@@ -33,6 +34,7 @@ interface BulkRow {
   magDiuresis: string;
   magRespiratoryRate: string;
   notes: string;
+  isDeleted?: boolean; // Track deletion
 }
 
 const DILATION_OPTIONS = ['OEI', 'OEEA', 'OII', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
@@ -73,7 +75,6 @@ const COLUMNS: Column[] = [
   { key: 'misoCount', label: 'Miso Nº', type: 'text', inputMode: 'numeric', width: 'min-w-[60px]' },
   { key: 'oxy', label: 'Ocitocina', type: 'text', inputMode: 'numeric', width: 'min-w-[80px]' },
   { key: 'dxt', label: 'DXT', type: 'text', inputMode: 'numeric', width: 'min-w-[60px]' },
-  // Remaining columns
   { key: 'fc', label: 'FC', type: 'text', inputMode: 'numeric', width: 'min-w-[60px]' },
   { key: 'tax', label: 'TAX', type: 'text', inputMode: 'decimal', width: 'min-w-[60px]' },
   { key: 'spo2', label: 'Sat O2', type: 'text', inputMode: 'numeric', width: 'min-w-[60px]' },
@@ -83,15 +84,13 @@ const COLUMNS: Column[] = [
   { key: 'notes', label: 'Notas', type: 'text', width: 'min-w-[200px]' },
 ];
 
-const BulkObservationForm: React.FC = () => {
+const BulkEditObservationForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [patient, setPatient] = useState<Patient | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [rows, setRows] = useState<BulkRow[]>([]);
-  const [startTimeStr, setStartTimeStr] = useState<string>('');
   const tableRef = useRef<HTMLTableElement>(null);
 
   useEffect(() => {
@@ -105,184 +104,124 @@ const BulkObservationForm: React.FC = () => {
     const p = await patientService.getPatientById(patientId);
     if (p) {
       setPatient(p);
-      // Set default start time to now or admission time?
-      const now = new Date();
-      setStartTimeStr(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+      if (p.observations) {
+        const mappedRows = p.observations.map(obs => mapObservationToRow(obs));
+        setRows(mappedRows);
+      }
     }
     setLoading(false);
   };
 
-  const createEmptyRow = (dateStr: string, timeStr: string): BulkRow => ({
-    id: crypto.randomUUID(),
-    date: dateStr, time: timeStr,
-    bcf: '', du: '', pas: '', pad: '', pasStanding: '', padStanding: '', fc: '', tax: '', spo2: '', dxt: '',
-    dilationCombined: '', effacement: '', station: '', cervixPosition: '', cervixConsistency: '',
-    membranes: '', fetalPosition: '', bloodOnGlove: '',
-    oxy: '', miso: '', misoCount: '',
-    magReflex: '', magDiuresis: '', magRespiratoryRate: '',
-    notes: ''
-  });
+  const mapObservationToRow = (obs: Observation): BulkRow => {
+    const d = new Date(obs.timestamp);
+    const dateStr = d.toISOString().split('T')[0];
+    const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-  const addSingleRow = () => {
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const hourStr = String(now.getHours()).padStart(2, '0');
-    const minStr = String(now.getMinutes()).padStart(2, '0');
-    setRows(prev => [...prev, createEmptyRow(dateStr, `${hourStr}:${minStr}`)]);
-  };
+    let dilationCombined = '';
+    if (obs.obstetric.dilation !== undefined) dilationCombined = String(obs.obstetric.dilation);
+    else if (obs.obstetric.cervixStatus && obs.obstetric.cervixStatus.length > 0) dilationCombined = obs.obstetric.cervixStatus[0];
 
-  const generateRowsFromStartTime = () => {
-    if (!patient || !startTimeStr) return;
-
-    // Determine end time (first existing observation or now)
-    let endTime = new Date();
-    if (patient.observations && patient.observations.length > 0) {
-      // Sort observations by timestamp to find the first one
-      const sortedObs = [...patient.observations].sort((a, b) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
-      endTime = new Date(sortedObs[0].timestamp);
+    let effacement = '';
+    if (obs.obstetric.effacement !== undefined) {
+        effacement = obs.obstetric.effacement === 0 ? 'Colo Grosso (0%)' : `${obs.obstetric.effacement}%`;
     }
 
-    // Determine start time
-    // We assume the start time is on the same day as the end time, or we need a date input too?
-    // The user only asked for "horário de início" (start time).
-    // Usually bulk entry is for the same day or recent past.
-    // Let's assume the start date is the same as the end date (first obs date), 
-    // but adjusted for the time.
-    
-    const startDate = new Date(endTime);
-    const [startHour, startMin] = startTimeStr.split(':').map(Number);
-    startDate.setHours(startHour, startMin, 0, 0);
-
-    // If startDate is after endTime, maybe it means the previous day?
-    // Or maybe the user just picked a time later than the first obs?
-    // Let's assume if startDate > endTime, we shouldn't generate anything or warn.
-    if (startDate > endTime) {
-        // Try subtracting 1 day if it looks like a wrap-around? 
-        // Or just alert.
-        // Let's just generate up to current time if no obs exist.
-        if (!patient.observations || patient.observations.length === 0) {
-            // If no obs, generate from startDate (today) until Now.
-            const now = new Date();
-            // If startDate is in future relative to now (e.g. user picked 23:00 but it's 10:00), assume yesterday?
-            if (startDate > now) {
-                startDate.setDate(startDate.getDate() - 1);
-            }
-            endTime = now;
-        } else {
-             // If startDate > endTime (first obs), it's invalid for "filling until first obs".
-             // Unless we assume the user wants to fill *after* the last obs?
-             // The prompt says "até o primeiro horário já existente".
-             // So if first obs is 10:00, and user puts 12:00, it's invalid.
-             // If user puts 08:00, it's valid.
-             if (startDate > endTime) {
-                 // Maybe the first obs is tomorrow?
-                 // Let's just use the date of the first obs.
-                 // If start hour > end hour, assume previous day.
-                 startDate.setDate(startDate.getDate() - 1);
-             }
-        }
+    let station = '';
+    if (obs.obstetric.station !== undefined) {
+        station = obs.obstetric.station === -4 ? 'AM' : String(obs.obstetric.station);
     }
 
-    const newRows: BulkRow[] = [];
-    let currentTime = new Date(startDate);
-
-    // Safety break to prevent infinite loops
-    let count = 0;
-    while (currentTime < endTime && count < 100) {
-      const dateStr = currentTime.toISOString().split('T')[0];
-      const hourStr = String(currentTime.getHours()).padStart(2, '0');
-      const minStr = String(currentTime.getMinutes()).padStart(2, '0');
-      
-      newRows.push(createEmptyRow(dateStr, `${hourStr}:${minStr}`));
-      
-      // Add 30 minutes
-      currentTime = new Date(currentTime.getTime() + 30 * 60000);
-      count++;
-    }
-
-    setRows(prev => [...prev, ...newRows]);
-  };
-
-  const removeRow = (rowId: string) => {
-    setRows(prev => prev.filter(r => r.id !== rowId));
+    return {
+      id: obs.id,
+      originalId: obs.id,
+      date: dateStr,
+      time: timeStr,
+      bcf: obs.obstetric.bcf !== undefined ? String(obs.obstetric.bcf) : '',
+      du: obs.obstetric.dinamicaSummary || (obs.obstetric.dinamicaFrequency ? String(obs.obstetric.dinamicaFrequency) : ''),
+      pas: obs.vitals.paSystolic !== undefined ? String(obs.vitals.paSystolic) : '',
+      pad: obs.vitals.paDiastolic !== undefined ? String(obs.vitals.paDiastolic) : '',
+      pasStanding: obs.vitals.paStandingSystolic !== undefined ? String(obs.vitals.paStandingSystolic) : '',
+      padStanding: obs.vitals.paStandingDiastolic !== undefined ? String(obs.vitals.paStandingDiastolic) : '',
+      fc: obs.vitals.fc !== undefined ? String(obs.vitals.fc) : '',
+      tax: obs.vitals.tax !== undefined ? String(obs.vitals.tax) : '',
+      spo2: obs.vitals.spo2 !== undefined ? String(obs.vitals.spo2) : '',
+      dxt: obs.vitals.dxt !== undefined ? String(obs.vitals.dxt) : '',
+      dilationCombined,
+      effacement,
+      station,
+      cervixPosition: obs.obstetric.cervixPosition || '',
+      cervixConsistency: obs.obstetric.cervixConsistency || '',
+      membranes: obs.obstetric.membranes || '',
+      fetalPosition: obs.obstetric.fetalPosition || '',
+      bloodOnGlove: obs.obstetric.bloodOnGlove === true ? 'true' : obs.obstetric.bloodOnGlove === false ? 'false' : '',
+      oxy: obs.medication?.oxytocinDose !== undefined ? String(obs.medication.oxytocinDose) : '',
+      miso: obs.medication?.misoprostolDose !== undefined ? String(obs.medication.misoprostolDose) : '',
+      misoCount: obs.medication?.misoprostolCount !== undefined ? String(obs.medication.misoprostolCount) : '',
+      magReflex: obs.magnesiumData?.reflex || '',
+      magDiuresis: obs.magnesiumData?.diuresis || '',
+      magRespiratoryRate: obs.magnesiumData?.respiratoryRate !== undefined ? String(obs.magnesiumData.respiratoryRate) : '',
+      notes: obs.notes || ''
+    };
   };
 
   const updateRow = (rowId: string, field: keyof BulkRow, value: string) => {
     setRows(prev => prev.map(r => r.id === rowId ? { ...r, [field]: value } : r));
   };
 
+  const markForDeletion = (rowId: string) => {
+    setRows(prev => prev.map(r => r.id === rowId ? { ...r, isDeleted: !r.isDeleted } : r));
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>, rowIndex: number, colIndex: number) => {
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
-      // Prevent default scrolling/number changing behavior for navigation keys
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter') {
-        e.preventDefault();
-      }
-      
-      // For Left/Right, only prevent default if we are actually navigating
-      // If we are in a text input and cursor is not at boundary, we should let it move cursor
-      // But we changed inputs to type="text", so standard behavior applies.
-      
-      let nextRow = rowIndex;
-      let nextCol = colIndex;
-
-      if (e.key === 'ArrowUp') nextRow = Math.max(0, rowIndex - 1);
-      if (e.key === 'ArrowDown' || e.key === 'Enter') nextRow = Math.min(rows.length - 1, rowIndex + 1);
-      
-      if (e.key === 'ArrowLeft') {
-        const input = e.currentTarget as HTMLInputElement;
-        if (e.currentTarget.tagName === 'SELECT' || input.selectionStart === 0) {
-           nextCol = Math.max(0, colIndex - 1);
-           e.preventDefault(); // Prevent default if we are leaving the cell
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'].includes(e.key)) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter') {
+          e.preventDefault();
+        }
+        
+        let nextRow = rowIndex;
+        let nextCol = colIndex;
+  
+        if (e.key === 'ArrowUp') nextRow = Math.max(0, rowIndex - 1);
+        if (e.key === 'ArrowDown' || e.key === 'Enter') nextRow = Math.min(rows.length - 1, rowIndex + 1);
+        
+        if (e.key === 'ArrowLeft') {
+          const input = e.currentTarget as HTMLInputElement;
+          if (e.currentTarget.tagName === 'SELECT' || input.selectionStart === 0) {
+             nextCol = Math.max(0, colIndex - 1);
+             e.preventDefault();
+          }
+        }
+        
+        if (e.key === 'ArrowRight') {
+          const input = e.currentTarget as HTMLInputElement;
+          if (e.currentTarget.tagName === 'SELECT' || input.selectionEnd === input.value.length) {
+             nextCol = Math.min(COLUMNS.length - 1, colIndex + 1);
+             e.preventDefault();
+          }
+        }
+  
+        const nextId = `cell-${nextRow}-${nextCol}`;
+        const nextElement = document.getElementById(nextId);
+        if (nextElement) {
+          nextElement.focus();
         }
       }
-      
-      if (e.key === 'ArrowRight') {
-        const input = e.currentTarget as HTMLInputElement;
-        if (e.currentTarget.tagName === 'SELECT' || input.selectionEnd === input.value.length) {
-           nextCol = Math.min(COLUMNS.length - 1, colIndex + 1);
-           e.preventDefault(); // Prevent default if we are leaving the cell
-        }
-      }
-
-      const nextId = `cell-${nextRow}-${nextCol}`;
-      const nextElement = document.getElementById(nextId);
-      if (nextElement) {
-        nextElement.focus();
-        if (nextElement.tagName === 'INPUT') {
-          // Optional: select text on focus
-          // (nextElement as HTMLInputElement).select();
-        }
-      }
-    }
-  };
-
-  const hasAnyData = (row: BulkRow) => {
-    const dataFields = ['bcf', 'du', 'pas', 'pad', 'pasStanding', 'padStanding', 'fc', 'tax', 'spo2', 'dxt',
-      'dilationCombined', 'effacement', 'station', 'cervixPosition', 'cervixConsistency',
-      'membranes', 'fetalPosition', 'bloodOnGlove', 'oxy', 'miso', 'misoCount',
-      'magReflex', 'magDiuresis', 'magRespiratoryRate', 'notes'];
-    
-    return dataFields.some(field => (row as any)[field] !== '');
-  };
+    };
 
   const handleSave = async () => {
     if (!patient || !id) return;
-    
-    const rowsWithData = rows.filter(hasAnyData);
-    const validRows = rowsWithData.filter(r => r.date && r.time);
-    
-    if (validRows.length === 0) {
-      alert('Nenhuma aferição preenchida para salvar.');
-      return;
-    }
-
     setSaving(true);
     try {
       const numOrUndef = (val: string) => val === '' ? undefined : Number(val);
 
-      for (const row of validRows) {
+      for (const row of rows) {
+        if (row.isDeleted && row.originalId) {
+            await patientService.deleteObservation(row.originalId);
+            continue;
+        }
+
+        if (row.isDeleted) continue; // Skip new rows that were deleted before save (if we supported adding)
+
         const timestamp = new Date(`${row.date}T${row.time}`).toISOString();
 
         // Parse Dilation Combined
@@ -317,7 +256,7 @@ const BulkObservationForm: React.FC = () => {
             }
         }
 
-        const obsData: Omit<Observation, 'id'> = {
+        const obsData: Partial<Observation> = {
           patientId: id,
           timestamp: timestamp,
           examinerName: 'Dr. Demo',
@@ -358,73 +297,54 @@ const BulkObservationForm: React.FC = () => {
           notes: row.notes || undefined
         };
 
-        await patientService.addObservation(obsData);
+        if (row.originalId) {
+            await patientService.updateObservation(row.originalId, obsData);
+        } else {
+            // If we support adding new rows here later
+            // await patientService.addObservation(obsData as any);
+        }
       }
       
       navigate(`/patient/${id}`);
     } catch (error) {
       console.error('Erro ao salvar lote:', error);
-      alert('Ocorreu um erro ao salvar as aferições.');
+      alert('Ocorreu um erro ao salvar as alterações.');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Carregando paciente...</div>;
+  if (loading) return <div className="p-8 text-center">Carregando...</div>;
   if (!patient) return <div className="p-8 text-center text-red-500">Paciente não encontrado</div>;
 
   return (
     <div className="space-y-6 pb-20 max-w-full mx-auto px-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link to={`/patient/${id}`} className="p-2 hover:bg-slate-100 rounded-full text-slate-600">
             <ArrowLeft className="w-6 h-6" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Adicionar Lote</h1>
+            <h1 className="text-xl font-bold text-slate-900">Edição em Lote</h1>
             <p className="text-sm text-slate-500">Paciente: {patient.name}</p>
           </div>
         </div>
         <button
           onClick={handleSave}
-          disabled={saving || rows.length === 0}
+          disabled={saving}
           className="bg-medical-600 hover:bg-medical-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 disabled:opacity-50 transition-colors"
         >
           <Save className="w-4 h-4" />
-          {saving ? 'Salvando...' : 'Salvar Lote'}
+          {saving ? 'Salvando...' : 'Salvar Alterações'}
         </button>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <p className="text-sm text-slate-600">
-            Use as setas do teclado para navegar entre as células.
-          </p>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button 
-              onClick={addSingleRow}
-              className="text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded flex items-center gap-1 font-bold shadow-sm whitespace-nowrap"
-            >
-              <Plus className="w-3 h-3" /> Linha Avulsa
-            </button>
-            <div className="w-px h-6 bg-slate-200 mx-1"></div>
-            <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden shadow-sm">
-              <span className="text-xs text-slate-500 px-2 bg-slate-50 border-r border-slate-200 h-full flex items-center">Início</span>
-              <input 
-                type="time" 
-                value={startTimeStr}
-                onChange={(e) => setStartTimeStr(e.target.value)}
-                className="w-24 p-1.5 text-sm text-center outline-none"
-              />
-            </div>
-            <button 
-              onClick={generateRowsFromStartTime}
-              className="text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-1.5 rounded flex items-center gap-1 font-bold shadow-sm whitespace-nowrap"
-            >
-              <Plus className="w-3 h-3" /> Preencher até Agora
-            </button>
-          </div>
+        <div className="p-4 border-b border-slate-100 bg-slate-50">
+            <p className="text-sm text-slate-600 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+                Edite os valores diretamente na tabela. Para excluir uma linha, clique no ícone de lixeira.
+            </p>
         </div>
 
         <div className="overflow-x-auto max-h-[70vh]">
@@ -444,11 +364,11 @@ const BulkObservationForm: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((row, rowIndex) => (
-                <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                <tr key={row.id} className={`hover:bg-slate-50/50 transition-colors ${row.isDeleted ? 'bg-red-50 opacity-50' : ''}`}>
                   {COLUMNS.map((col, colIndex) => (
                     <td 
                         key={col.key} 
-                        className={`p-1 bg-white ${col.sticky ? `sticky ${col.sticky} ${col.z || 'z-10'} shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]` : ''}`}
+                        className={`p-1 bg-white ${col.sticky ? `sticky ${col.sticky} ${col.z || 'z-10'} shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]` : ''} ${row.isDeleted ? 'bg-red-50' : ''}`}
                     >
                       {col.type === 'select' ? (
                         <select
@@ -456,6 +376,7 @@ const BulkObservationForm: React.FC = () => {
                           value={(row as any)[col.key]}
                           onChange={(e) => updateRow(row.id, col.key as keyof BulkRow, e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                          disabled={row.isDeleted}
                           autoComplete="off"
                           className={`w-full p-1.5 border border-slate-200 rounded text-xs bg-white focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none ${col.width}`}
                         >
@@ -476,6 +397,7 @@ const BulkObservationForm: React.FC = () => {
                           value={(row as any)[col.key]}
                           onChange={(e) => updateRow(row.id, col.key as keyof BulkRow, e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                          disabled={row.isDeleted}
                           autoComplete="off"
                           className={`w-full p-1.5 border border-slate-200 rounded text-xs bg-white focus:ring-2 focus:ring-medical-500 focus:border-medical-500 outline-none ${col.width}`}
                         />
@@ -484,11 +406,11 @@ const BulkObservationForm: React.FC = () => {
                   ))}
                   <td className="p-1 text-center sticky right-0 bg-white z-20 shadow-[-4px_0_6px_-1px_rgba(0,0,0,0.05)]">
                     <button 
-                      onClick={() => removeRow(row.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title="Remover linha"
+                      onClick={() => markForDeletion(row.id)}
+                      className={`p-1.5 rounded transition-colors ${row.isDeleted ? 'text-slate-500 hover:bg-slate-100' : 'text-slate-400 hover:text-red-500 hover:bg-red-50'}`}
+                      title={row.isDeleted ? "Restaurar" : "Excluir"}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {row.isDeleted ? <ArrowLeft className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                     </button>
                   </td>
                 </tr>
@@ -496,7 +418,7 @@ const BulkObservationForm: React.FC = () => {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={COLUMNS.length + 1} className="p-8 text-center text-slate-500">
-                    Nenhuma linha adicionada. Indique o horário de início e clique em "Preencher".
+                    Nenhuma evolução registrada para este paciente.
                   </td>
                 </tr>
               )}
@@ -508,4 +430,4 @@ const BulkObservationForm: React.FC = () => {
   );
 };
 
-export default BulkObservationForm;
+export default BulkEditObservationForm;

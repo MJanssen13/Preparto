@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { Patient, CTG } from '../types';
-import { ArrowLeft, Activity, Save, Calculator, AlertCircle, Info, Trash2 } from 'lucide-react';
+import { ArrowLeft, Activity, Save, Calculator, AlertCircle, Info, Trash2, Camera, X } from 'lucide-react';
 
 const CTGForm: React.FC = () => {
   const { id, ctgId } = useParams<{ id: string, ctgId?: string }>();
@@ -13,6 +13,7 @@ const CTGForm: React.FC = () => {
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [time, setTime] = useState(new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+  const [image, setImage] = useState<string | undefined>(undefined);
 
   const [formData, setFormData] = useState({
     baseline: '',
@@ -53,6 +54,7 @@ const CTGForm: React.FC = () => {
                 
                 setDate(`${y}-${m}-${day}`);
                 setTime(d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                setImage(ctg.image);
 
                 setFormData({
                     baseline: String(ctg.baseline),
@@ -110,6 +112,21 @@ const CTGForm: React.FC = () => {
       setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImage(undefined);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!id || !patient) return;
@@ -133,7 +150,8 @@ const CTGForm: React.FC = () => {
           stimulusCount: formData.soundStimulus === 'Realizado' ? formData.stimulusCount : undefined,
           score: calculatedScore,
           conclusion: suggestedConclusion,
-          notes: formData.notes
+          notes: formData.notes,
+          image: image
       };
 
       try {
@@ -210,6 +228,39 @@ const CTGForm: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hora</label>
                 <input type="time" required value={time} onChange={e => setTime(e.target.value)} className="w-full p-2 bg-white border border-slate-300 rounded-lg text-sm" />
             </div>
+        </div>
+
+        {/* Image Upload */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                <Camera className="w-4 h-4" /> Foto do Exame (Opcional)
+            </label>
+            
+            {!image ? (
+                <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-50 transition-colors cursor-pointer relative">
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleImageChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="flex flex-col items-center gap-2 text-slate-400">
+                        <Camera className="w-8 h-8" />
+                        <span className="text-sm font-medium">Toque para adicionar foto</span>
+                    </div>
+                </div>
+            ) : (
+                <div className="relative rounded-xl overflow-hidden border border-slate-200">
+                    <img src={image} alt="CTG Preview" className="w-full h-auto max-h-64 object-contain bg-slate-100" />
+                    <button 
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-colors"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
         </div>
 
         {/* --- PARAMETERS --- */}
