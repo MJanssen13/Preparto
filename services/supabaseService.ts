@@ -274,21 +274,28 @@ export const patientService = {
         });
     }
 
-    // SUPABASE: Join observations AND ctgs
+    // SUPABASE: Optimized fetch - Get patients with essential observation data only
+    // We exclude CTGs (too heavy) and full observation details
     const { data, error } = await supabase
         .from('patients')
-        .select('*, observations(*), ctgs(*)')
+        .select(`
+            *,
+            observations (
+                id,
+                timestamp,
+                obstetric,
+                vitals
+            )
+        `)
         .order('bed', { ascending: true });
         
     if (error) return [];
     
     const patients = data.map(dbPatient => {
         const p = mapPatientFromDB(dbPatient);
+        // Sort observations desc
         if (p.observations) {
             p.observations.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        }
-        if (p.ctgs) {
-            p.ctgs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         }
         return p;
     });
