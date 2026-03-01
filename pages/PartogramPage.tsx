@@ -570,7 +570,7 @@ const PartogramPage: React.FC = () => {
   if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin h-8 w-8 border-b-2 border-slate-800 rounded-full"></div></div>;
 
   return (
-    <div className="pb-20 bg-slate-100 min-h-screen flex flex-col items-center print:bg-white print:pb-0">
+    <div className="pb-20 bg-slate-100 min-h-screen flex flex-col items-center print:block print:bg-white print:pb-0 print:h-auto print:overflow-visible">
       <style>
         {`
           @media print {
@@ -579,8 +579,17 @@ const PartogramPage: React.FC = () => {
               margin: 0;
             }
             body {
+              margin: 0;
+              padding: 0;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+            }
+            .print-container {
+              width: 210mm !important;
+              height: 297mm !important;
+              margin: 0 auto !important;
+              box-shadow: none !important;
+              overflow: visible !important;
             }
           }
           /* Force hide spinners on all inputs in this component */
@@ -641,7 +650,7 @@ const PartogramPage: React.FC = () => {
       </div>
 
       {/* --- CANVAS --- */}
-      <div className="bg-white shadow-2xl my-8 relative overflow-hidden print:shadow-none print:my-0" style={{ width: '210mm', height: '297mm' }}> 
+      <div className="bg-white shadow-2xl my-8 relative overflow-hidden print-container" style={{ width: '210mm', height: '297mm' }}> 
          <div className="absolute inset-0 overflow-auto print:overflow-visible">
              <svg 
                 ref={svgRef}
