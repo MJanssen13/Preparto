@@ -147,6 +147,105 @@ const PatientDetails: React.FC = () => {
           });
       }
 
+      // --- PARTOGRAM DATA ---
+      if (p.partogramData && p.partogramData.startTime) {
+          const startDate = new Date(p.partogramData.startTime);
+          const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: '2-digit'});
+          const timeStr = startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          
+          text += `\n# ABERTO PARTOGRAMA: ${dateStr} ${timeStr} HS #\n`;
+
+          if (p.partogramData.tableData) {
+              p.partogramData.tableData.forEach((col, index) => {
+                  // Check if there is any data for this hour to avoid empty lines
+                  const hasPoints = p.partogramData?.points.some(pt => Math.floor(pt.x) === index);
+                  const hasContractions = p.partogramData?.contractionBlocks?.some(c => c.x === index);
+                  const hasTableData = col.amnioticFluid || col.la || col.oxytocin || col.meds || col.examiner;
+                  
+                  // Skip if completely empty and no realTime set (or just empty realTime)
+                  if (!col.realTime && !hasPoints && !hasContractions && !hasTableData) return;
+
+                  const parts = [];
+                  
+                  // 1. Hora Real
+                  // Ensure format HH:00 if only HH is provided
+                  let hourStr = col.realTime || '--';
+                  if (hourStr.length <= 2 && !hourStr.includes(':')) hourStr += ':00';
+                  parts.push(`${hourStr} HS`);
+                  
+                  // 2. Hora de Registro
+                  if (col.registerHour) {
+                      parts.push(`${col.registerHour}ª H DE REG`);
+                  }
+
+                  // 3. Dilatação
+                  const dilPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'dilation');
+                  if (dilPoint) parts.push(`DILAT ${dilPoint.y}CM`);
+
+                  // 4. De Lee (Station)
+                  const stationPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'station');
+                  if (stationPoint) {
+                      // Logic from PartogramPage: y = 6 - station => station = 6 - y
+                      const stationVal = 6 - stationPoint.y;
+                      const sign = stationVal > 0 ? '+' : '';
+                      parts.push(`DE LEE ${sign}${stationVal}`);
+                  }
+
+                  // 5. BCF (Main line - approx x=index)
+                  const bcfPoints = p.partogramData?.points.filter(pt => pt.type === 'fcf' && Math.floor(pt.x) === index).sort((a,b) => a.x - b.x);
+                  const mainBcf = bcfPoints?.find(pt => Math.abs(pt.x - index) < 0.05);
+                  if (mainBcf) parts.push(`BCF ${mainBcf.y}`);
+
+                  // 6. Contractions
+                  const blocks = p.partogramData?.contractionBlocks?.filter(c => c.x === index);
+                  if (blocks && blocks.length > 0) {
+                      const strong = blocks.filter(c => c.type === 'strong').length;
+                      const moderate = blocks.filter(c => c.type === 'moderate').length;
+                      const weak = blocks.filter(c => c.type === 'weak').length;
+                      parts.push(`CONTR >40": ${strong}, 20-39": ${moderate}, <20": ${weak}`);
+                  }
+
+                  // 7. Bolsa
+                  if (col.amnioticFluid) parts.push(col.amnioticFluid);
+
+                  // 8. LA
+                  if (col.la) parts.push(`LA ${col.la}`);
+
+                  // 9. Ocitocina
+                  if (col.oxytocin) parts.push(`OCITO ${col.oxytocin}`);
+
+                  // 10. Medicamentos
+                  if (col.meds) parts.push(`MEU: ${col.meds}`);
+
+                  text += parts.join(' | ') + '\n';
+
+                  // Sub-lines for BCF (points not at x=index)
+                  const otherBcfs = bcfPoints?.filter(pt => Math.abs(pt.x - index) >= 0.05);
+                  if (otherBcfs && otherBcfs.length > 0) {
+                      otherBcfs.forEach(pt => {
+                          const minutes = Math.round((pt.x - index) * 60);
+                          let subTimeStr = '';
+                          
+                          // Calculate sub-time based on hour
+                          const h = parseInt(col.realTime);
+                          if (!isNaN(h)) {
+                              const m = minutes.toString().padStart(2, '0');
+                              subTimeStr = `${h}:${m} HS`;
+                          } else {
+                              subTimeStr = `+${minutes}min`;
+                          }
+
+                          const subParts = [subTimeStr];
+                          if (col.registerHour) subParts.push(`${col.registerHour}ª H DE REG`);
+                          subParts.push(`BCF ${pt.y}`);
+                          
+                          text += subParts.join(' | ') + '\n';
+                      });
+                  }
+              });
+          }
+      }
+
       if (p.status === PatientStatus.PARTOGRAM_OPENED) {
           text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
       } else if (p.status === PatientStatus.DELIVERY) {

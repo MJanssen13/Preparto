@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { patientService } from '../services/supabaseService';
 import { Patient, PartogramData, PartogramPoint, PartogramTableColumn, PartogramContractionBlock } from '../types';
+import { AutoResizingTextarea } from '../components/AutoResizingTextarea';
 import { ArrowLeft, Save, X, Square, Eraser, Trash2, Printer } from 'lucide-react';
 
 // --- EXACT COORDINATES FROM NEW UFTM SVG (2481 x 3508) ---
@@ -96,7 +97,8 @@ const PartogramPage: React.FC = () => {
       parity: '',
       bloodType: '',
       babyName: '',
-      startDate: '' // New field for Data de Início
+      startDate: '', // New field for Data de Início
+      startTime: '' // New field for Hora de Início
   });
   
   // --- UI CONTROLS ---
@@ -169,8 +171,8 @@ const PartogramPage: React.FC = () => {
           marginTop: isBottom ? 0 : '10px',
           marginBottom: isBottom ? '10px' : 0,
           zIndex: 50,
-          maxHeight: '300px',
-          overflowY: 'auto' as const
+          maxHeight: 'none',
+          overflowY: 'visible' as const
       };
   };
 
@@ -192,10 +194,19 @@ const PartogramPage: React.FC = () => {
                     parity: p.parity || '',
                     bloodType: p.bloodType ? formatBloodType(p.bloodType) : '',
                     babyName: p.babyName || '',
-                    startDate: new Date().getDate().toString() // Just the day
+                    startDate: new Date().getDate().toString(), // Just the day
+                    startTime: ''
                 });
 
                 if (p.partogramData) {
+                    // Restore headerData from saved partogramData if available
+                    if (p.partogramData.headerData) {
+                        setHeaderData(prev => ({
+                            ...prev,
+                            ...p.partogramData?.headerData
+                        }));
+                    }
+                    
                     setPoints(p.partogramData.points);
                     
                     // Load Contractions
@@ -228,14 +239,7 @@ const PartogramPage: React.FC = () => {
                         notes: ''
                     }));
                     
-                    const now = new Date();
-                    now.setMinutes(0,0,0);
-                    const updatedTable = [...initialTable];
-                    for(let i=0; i<NUM_COLS; i++) {
-                        const t = new Date(now.getTime() + i * 60 * 60 * 1000);
-                        updatedTable[i].realTime = t.getHours().toString();
-                    }
-                    setTableData(updatedTable);
+                    setTableData(initialTable);
                 }
             }
             setLoading(false);
@@ -579,6 +583,21 @@ const PartogramPage: React.FC = () => {
               print-color-adjust: exact;
             }
           }
+          /* Force hide spinners on all inputs in this component */
+          input[type=number]::-webkit-inner-spin-button, 
+          input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+          }
+          input[type=number] {
+            -moz-appearance: textfield;
+          }
+          /* Also target text inputs just in case */
+          input[type=text]::-webkit-inner-spin-button, 
+          input[type=text]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+          }
         `}
       </style>
       {/* TOOLBAR */}
@@ -589,31 +608,18 @@ const PartogramPage: React.FC = () => {
              </button>
          </div>
 
+         {/* Start Time Input - For Registration Only */}
+         <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+             <span className="text-xs font-bold text-slate-600">Início:</span>
+             <input 
+                 type="time" 
+                 value={headerData.startTime}
+                 className="bg-white border border-slate-300 rounded px-2 py-0.5 text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                 onChange={e => handleHeaderChange('startTime', e.target.value)}
+             />
+         </div>
+
          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-             <div className="flex bg-slate-100 p-1 rounded-lg">
-                 <button onClick={() => setInputMode('dilation')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 transition-all ${inputMode==='dilation'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
-                     <span className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[8px] border-b-black"></span> Dilat
-                 </button>
-                 <button onClick={() => setInputMode('station')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 transition-all ${inputMode==='station'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
-                     <span className="w-2 h-2 border border-black rounded-full"></span> De Lee
-                 </button>
-                 <button onClick={() => setInputMode('fcf')} className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1 transition-all ${inputMode==='fcf'?'bg-white text-slate-900 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
-                     <span className="w-1 h-1 bg-black rounded-full"></span> BCF
-                 </button>
-             </div>
-
-             <div className="flex bg-slate-100 p-1 rounded-lg">
-                 <button onClick={() => { setInputMode('contraction'); setContractionType('weak'); }} className={`px-3 py-1.5 rounded-md transition-all ${inputMode==='contraction'&&contractionType==='weak'?'bg-white shadow-sm':''}`} title="Fraca (<20s)">
-                     <X className="w-3 h-3 text-slate-700" />
-                 </button>
-                 <button onClick={() => { setInputMode('contraction'); setContractionType('moderate'); }} className={`px-3 py-1.5 rounded-md transition-all ${inputMode==='contraction'&&contractionType==='moderate'?'bg-white shadow-sm':''}`} title="Média (20-40s)">
-                     <div className="w-3 h-3 border border-slate-700 relative overflow-hidden"><div className="absolute inset-0 bg-slate-400" style={{clipPath:'polygon(0 0, 100% 0, 0 100%)'}}></div></div>
-                 </button>
-                 <button onClick={() => { setInputMode('contraction'); setContractionType('strong'); }} className={`px-3 py-1.5 rounded-md transition-all ${inputMode==='contraction'&&contractionType==='strong'?'bg-white shadow-sm':''}`} title="Forte (>40s)">
-                     <Square className="w-3 h-3 fill-slate-700 text-slate-700" />
-                 </button>
-             </div>
-
              <div className="w-px h-6 bg-slate-200"></div>
 
              <button onClick={() => setInputMode('eraser')} className={`p-2 rounded-lg border ${inputMode==='eraser'?'bg-red-50 border-red-200 text-red-600':'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'}`}>
@@ -627,9 +633,6 @@ const PartogramPage: React.FC = () => {
          <div className="flex items-center gap-2">
              <button onClick={() => window.print()} className="hidden sm:flex px-3 py-2 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 gap-2 items-center">
                  <Printer className="w-4 h-4" /> Imprimir
-             </button>
-             <button onClick={setStartActivePhase} className="hidden sm:flex px-3 py-2 text-xs font-bold text-red-700 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100">
-                 Linha de Alerta
              </button>
              <button onClick={handleSave} disabled={isSubmitting} className="bg-slate-900 text-white px-4 py-2 rounded-lg font-bold text-xs shadow-md hover:bg-slate-800 flex items-center gap-2">
                 <Save className="w-4 h-4" /> Salvar
@@ -665,45 +668,45 @@ const PartogramPage: React.FC = () => {
                     
                     {/* DYNAMIC PATIENT DATA - Positioned relative to main group */}
                     <foreignObject x="350" y="830" width="250" height="60">
-                        <input value={headerData.date} onChange={e => handleHeaderChange('date', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.date} onChange={e => handleHeaderChange('date', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     <foreignObject x="1650" y="830" width="400" height="60">
-                        <input value={headerData.id} onChange={e => handleHeaderChange('id', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.id} onChange={e => handleHeaderChange('id', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     
                     <foreignObject x="380" y="910" width="1400" height="60">
-                        <input value={headerData.name} onChange={e => handleHeaderChange('name', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.name} onChange={e => handleHeaderChange('name', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     <foreignObject x="2000" y="910" width="200" height="60">
-                        <input value={headerData.age} onChange={e => handleHeaderChange('age', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.age} onChange={e => handleHeaderChange('age', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     
                     <foreignObject x="350" y="1000" width="350" height="60">
-                        <input value={headerData.dum} onChange={e => handleHeaderChange('dum', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.dum} onChange={e => handleHeaderChange('dum', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     <foreignObject x="850" y="1000" width="330" height="60">
-                        <input value={headerData.dpp} onChange={e => handleHeaderChange('dpp', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.dpp} onChange={e => handleHeaderChange('dpp', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     <foreignObject x="1420" y="1000" width="320" height="60">
-                        <input value={headerData.ig} onChange={e => handleHeaderChange('ig', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.ig} onChange={e => handleHeaderChange('ig', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     <foreignObject x="1950" y="1000" width="300" height="60">
-                        <input value={headerData.us} onChange={e => handleHeaderChange('us', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.us} onChange={e => handleHeaderChange('us', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     
                     <foreignObject x="480" y="1080" width="700" height="60">
-                        <input value={headerData.parity} onChange={e => handleHeaderChange('parity', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.parity} onChange={e => handleHeaderChange('parity', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
-                    <foreignObject x="1450" y="1080" width="300" height="60">
-                        <input value={headerData.bloodType} onChange={e => handleHeaderChange('bloodType', e.target.value)} onBlur={handleBloodTypeBlur} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                    <foreignObject x="1413" y="1080" width="300" height="60">
+                        <input type="text" value={headerData.bloodType} onChange={e => handleHeaderChange('bloodType', e.target.value)} onBlur={handleBloodTypeBlur} className="w-full h-full bg-transparent text-[30px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     <foreignObject x="1750" y="1080" width="500" height="60">
-                        <input value={headerData.babyName} onChange={e => handleHeaderChange('babyName', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase" />
+                        <input type="text" value={headerData.babyName} onChange={e => handleHeaderChange('babyName', e.target.value)} className="w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
                     </foreignObject>
                     
                     {/* START DATE - Positioned near "Data de início" */}
                     <foreignObject x="450" y="1830" width="300" height="60">
-                        <input value={headerData.startDate} onChange={e => handleHeaderChange('startDate', e.target.value)} className="w-full h-full bg-transparent text-[30px] font-bold border-none outline-none uppercase text-center" />
+                        <input type="text" value={headerData.startDate} onChange={e => handleHeaderChange('startDate', e.target.value)} className="w-full h-full bg-transparent text-[30px] font-bold border-none outline-none uppercase text-center appearance-none" />
                     </foreignObject>
 
                     {/* DYNAMIC GRAPH CONTENT */}
@@ -824,9 +827,12 @@ const PartogramPage: React.FC = () => {
              {/* Time Inputs */}
              <div className="absolute flex" style={{ top: (toVisualY(Y_TIME_REAL_TOP) / VIEWBOX_H * 100) + '%', left: (toVisualX(GRID_X_START) / VIEWBOX_W * 100) + '%', width: ((toVisualX(GRID_X_END) - toVisualX(GRID_X_START)) / VIEWBOX_W * 100) + '%', height: (toVisualY(Y_TIME_REAL_TOP + TIME_ROW_H) - toVisualY(Y_TIME_REAL_TOP)) / VIEWBOX_H * 100 + '%' }}>
                  {tableData.map((col, i) => (
-                     <input key={`hr-${i}`} type="text" value={col.realTime} onChange={e => updateTableData(i, 'realTime', e.target.value.toUpperCase())} 
-                        className="w-full h-full bg-transparent text-center text-[10px] sm:text-xs font-bold border-none outline-none p-0 text-black uppercase" 
-                        style={{ width: `${100/NUM_COLS}%` }}
+                     <textarea 
+                        key={`hr-${i}`} 
+                        value={col.realTime} 
+                        onChange={e => updateTableData(i, 'realTime', e.target.value.toUpperCase())} 
+                        className="w-full h-full bg-transparent text-center text-[10px] sm:text-xs font-bold border-none outline-none p-0 text-black uppercase resize-none overflow-hidden appearance-none" 
+                        style={{ width: `${100/NUM_COLS}%`, paddingTop: '4px' }}
                      />
                  ))}
              </div>
@@ -834,13 +840,12 @@ const PartogramPage: React.FC = () => {
              {/* Hour Reg Display - NOW EDITABLE */}
              <div className="absolute flex" style={{ top: (toVisualY(Y_TIME_REG_TOP) / VIEWBOX_H * 100) + '%', left: (toVisualX(GRID_X_START) / VIEWBOX_W * 100) + '%', width: ((toVisualX(GRID_X_END) - toVisualX(GRID_X_START)) / VIEWBOX_W * 100) + '%', height: (toVisualY(Y_TIME_REG_TOP + TIME_ROW_H) - toVisualY(Y_TIME_REG_TOP)) / VIEWBOX_H * 100 + '%' }}>
                  {tableData.map((col, i) => (
-                     <input 
+                     <textarea 
                         key={`reg-${i}`} 
-                        type="text"
-                        value={col.registerHour !== undefined ? col.registerHour : (i + 1).toString()}
+                        value={col.registerHour || ''}
                         onChange={e => updateTableData(i, 'registerHour', e.target.value.toUpperCase())}
-                        className="w-full h-full bg-transparent text-center text-[10px] sm:text-xs font-bold border-none outline-none p-0 text-slate-700 uppercase" 
-                        style={{ width: `${100/NUM_COLS}%` }}
+                        className="w-full h-full bg-transparent text-center text-[10px] sm:text-xs font-bold border-none outline-none p-0 text-black uppercase resize-none overflow-hidden appearance-none" 
+                        style={{ width: `${100/NUM_COLS}%`, paddingTop: '4px' }}
                      />
                  ))}
              </div>
@@ -857,20 +862,20 @@ const PartogramPage: React.FC = () => {
                      {tableData.map((col, cIdx) => (
                          <div key={`cell-${row.key}-${cIdx}`} className="relative h-full border-none flex items-center justify-center overflow-hidden" style={{ width: `${100/NUM_COLS}%` }}>
                              {row.rotate ? (
-                                 <textarea 
-                                     value={(col[row.key as keyof PartogramTableColumn] as string || '').trim()}
+                                 <AutoResizingTextarea 
+                                     value={col[row.key as keyof PartogramTableColumn] as string || ''}
                                      onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
-                                     className={`w-full h-full bg-transparent text-left ${(row as any).fontSize || 'text-[10px] sm:text-xs'} font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none`}
+                                     className={`w-full h-full bg-transparent text-left ${(row as any).fontSize || 'text-[8px] sm:text-[9px]'} font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none`}
                                      style={{ 
                                          writingMode: 'vertical-rl',
                                          transform: 'rotate(180deg)',
                                      }}
                                  />
                              ) : (
-                                 <textarea 
+                                 <AutoResizingTextarea 
                                      value={col[row.key as keyof PartogramTableColumn] as string || ''}
                                      onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
-                                     className="w-full h-full bg-transparent text-center text-[10px] sm:text-xs font-bold border-none outline-none p-1 text-black uppercase resize-none appearance-none"
+                                     className={`w-full h-full bg-transparent text-center ${(row as any).fontSize || 'text-[8px] sm:text-[9px]'} font-bold border-none outline-none p-1 text-black uppercase resize-none overflow-hidden appearance-none`}
                                  />
                              )}
                          </div>
@@ -880,16 +885,21 @@ const PartogramPage: React.FC = () => {
 
              {/* OBSERVATIONS TEXTAREA - Right side of the graph */}
              <div className="absolute" style={{ 
-                 top: (toVisualY(2994) / VIEWBOX_H * 100) + '%', 
-                 left: (toVisualX(GRID_X_END + 20) / VIEWBOX_W * 100) + '%', 
-                 width: ((VIEWBOX_W - toVisualX(GRID_X_END + 20) - 50) / VIEWBOX_W * 100) + '%', 
-                 height: (toVisualY(3732 + 160) - toVisualY(2994)) / VIEWBOX_H * 100 + '%' 
+                 top: (toVisualY(1830) / VIEWBOX_H * 100) + '%', 
+                 left: (toVisualX(GRID_X_END + 130) / VIEWBOX_W * 100) + '%', 
+                 width: ((VIEWBOX_W - toVisualX(GRID_X_END + 130) - 50) / VIEWBOX_W * 100) + '%', 
+                 height: (toVisualY(3732 + 160) - toVisualY(1830)) / VIEWBOX_H * 100 + '%' 
              }}>
-                 <textarea 
+                 <AutoResizingTextarea 
                      value={observations}
                      onChange={e => setObservations(e.target.value.toUpperCase())}
-                     className="w-full h-full bg-transparent border border-slate-300 p-2 text-xs font-bold text-black uppercase resize-none appearance-none"
-                     placeholder="OBSERVAÇÕES"
+                     className="w-full h-full bg-transparent text-left text-[8px] sm:text-[9px] font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none"
+                     style={{ 
+                         writingMode: 'vertical-rl',
+                         transform: 'rotate(180deg)',
+                         textAlign: 'left',
+                         textAlignLast: 'left'
+                     }}
                  />
              </div>
 

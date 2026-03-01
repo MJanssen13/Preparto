@@ -21,14 +21,23 @@ const SchedulePage: React.FC = () => {
   useEffect(() => {
     loadPatients();
     const interval = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(interval);
+    
+    // Subscribe to realtime changes
+    const subscription = patientService.subscribeToChanges(() => {
+        loadPatients(true);
+    });
+
+    return () => {
+        clearInterval(interval);
+        subscription.unsubscribe();
+    };
   }, []);
 
-  const loadPatients = async () => {
-    setLoading(true);
+  const loadPatients = async (silent = false) => {
+    if (!silent) setLoading(true);
     const data = await patientService.getPatients();
     setPatients(data);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   // Filter tasks: Exclude patients who are Discharged OR Partogram Opened

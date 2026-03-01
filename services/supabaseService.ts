@@ -644,5 +644,21 @@ export const patientService = {
 
     const { error } = await supabase.from('ctgs').delete().eq('id', id);
     if (error) throw error;
+  },
+
+  subscribeToChanges(callback: () => void): { unsubscribe: () => void } {
+      if (!supabase) return { unsubscribe: () => {} };
+
+      const channel = supabase
+          .channel('public:changes')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'patients' }, callback)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'observations' }, callback)
+          .subscribe();
+
+      return {
+          unsubscribe: () => {
+              supabase.removeChannel(channel);
+          }
+      };
   }
 };
