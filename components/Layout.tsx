@@ -16,7 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Top Bar for Desktop/Mobile Branding */}
-      <header className="bg-white shadow-sm sticky top-0 z-10 border-b border-slate-100">
+      <header className="bg-white shadow-sm sticky top-0 z-10 border-b border-slate-100 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="bg-medical-500 p-1.5 rounded-lg">
@@ -41,7 +41,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center z-50 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex justify-between items-center z-50 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
         
         {/* 1. Pacientes */}
         <Link to="/patients" className={`flex flex-col items-center gap-1 w-14 ${isActive('/patients')}`}>
