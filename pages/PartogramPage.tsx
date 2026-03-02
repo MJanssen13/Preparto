@@ -829,88 +829,141 @@ const PartogramPage: React.FC = () => {
                      })}
                  </g> {/* END MAIN GROUP */}
 
-             </svg>
+                {/* === INPUTS INSIDE SVG (foreignObject) FOR PRINTING === */}
+                
+                {/* Time Inputs */}
+                <foreignObject 
+                    x={toVisualX(GRID_X_START)} 
+                    y={toVisualY(Y_TIME_REAL_TOP)} 
+                    width={toVisualX(GRID_X_END) - toVisualX(GRID_X_START)} 
+                    height={toVisualY(Y_TIME_REAL_TOP + TIME_ROW_H) - toVisualY(Y_TIME_REAL_TOP)}
+                >
+                    <div className="w-full h-full flex">
+                        {tableData.map((col, i) => (
+                            <div key={`hr-${i}`} style={{ width: `${100/NUM_COLS}%` }} className="h-full relative">
+                                <textarea 
+                                    value={col.realTime} 
+                                    onChange={e => updateTableData(i, 'realTime', e.target.value.toUpperCase())} 
+                                    className="print:hidden w-full h-full bg-transparent text-center text-[20px] font-bold border-none outline-none p-0 text-black uppercase resize-none overflow-hidden appearance-none" 
+                                    style={{ paddingTop: '4px' }}
+                                />
+                                <div className="hidden print:flex w-full h-full items-center justify-center text-[20px] font-bold text-black uppercase pt-1">
+                                    {col.realTime}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </foreignObject>
+                
+                {/* Hour Reg Display */}
+                <foreignObject 
+                    x={toVisualX(GRID_X_START)} 
+                    y={toVisualY(Y_TIME_REG_TOP)} 
+                    width={toVisualX(GRID_X_END) - toVisualX(GRID_X_START)} 
+                    height={toVisualY(Y_TIME_REG_TOP + TIME_ROW_H) - toVisualY(Y_TIME_REG_TOP)}
+                >
+                    <div className="w-full h-full flex">
+                        {tableData.map((col, i) => (
+                            <div key={`reg-${i}`} style={{ width: `${100/NUM_COLS}%` }} className="h-full relative">
+                                <textarea 
+                                    value={col.registerHour || ''}
+                                    onChange={e => updateTableData(i, 'registerHour', e.target.value.toUpperCase())}
+                                    className="print:hidden w-full h-full bg-transparent text-center text-[20px] font-bold border-none outline-none p-0 text-black uppercase resize-none overflow-hidden appearance-none" 
+                                    style={{ paddingTop: '4px' }}
+                                />
+                                <div className="hidden print:flex w-full h-full items-center justify-center text-[20px] font-bold text-black uppercase pt-1">
+                                    {col.registerHour}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </foreignObject>
 
-             {/* === HTML OVERLAYS FOR INPUTS === */}
-             
-             {/* Time Inputs */}
-             <div className="absolute flex" style={{ top: (toVisualY(Y_TIME_REAL_TOP) / VIEWBOX_H * 100) + '%', left: (toVisualX(GRID_X_START) / VIEWBOX_W * 100) + '%', width: ((toVisualX(GRID_X_END) - toVisualX(GRID_X_START)) / VIEWBOX_W * 100) + '%', height: (toVisualY(Y_TIME_REAL_TOP + TIME_ROW_H) - toVisualY(Y_TIME_REAL_TOP)) / VIEWBOX_H * 100 + '%' }}>
-                 {tableData.map((col, i) => (
-                     <textarea 
-                        key={`hr-${i}`} 
-                        value={col.realTime} 
-                        onChange={e => updateTableData(i, 'realTime', e.target.value.toUpperCase())} 
-                        className="w-full h-full bg-transparent text-center text-[10px] sm:text-xs font-bold border-none outline-none p-0 text-black uppercase resize-none overflow-hidden appearance-none" 
-                        style={{ width: `${100/NUM_COLS}%`, paddingTop: '4px' }}
-                     />
-                 ))}
-             </div>
-             
-             {/* Hour Reg Display - NOW EDITABLE */}
-             <div className="absolute flex" style={{ top: (toVisualY(Y_TIME_REG_TOP) / VIEWBOX_H * 100) + '%', left: (toVisualX(GRID_X_START) / VIEWBOX_W * 100) + '%', width: ((toVisualX(GRID_X_END) - toVisualX(GRID_X_START)) / VIEWBOX_W * 100) + '%', height: (toVisualY(Y_TIME_REG_TOP + TIME_ROW_H) - toVisualY(Y_TIME_REG_TOP)) / VIEWBOX_H * 100 + '%' }}>
-                 {tableData.map((col, i) => (
-                     <textarea 
-                        key={`reg-${i}`} 
-                        value={col.registerHour || ''}
-                        onChange={e => updateTableData(i, 'registerHour', e.target.value.toUpperCase())}
-                        className="w-full h-full bg-transparent text-center text-[10px] sm:text-xs font-bold border-none outline-none p-0 text-black uppercase resize-none overflow-hidden appearance-none" 
-                        style={{ width: `${100/NUM_COLS}%`, paddingTop: '4px' }}
-                     />
-                 ))}
-             </div>
+                {/* Table Inputs */}
+                {TABLE_ROWS_CONFIG.map((row, rIdx) => (
+                    <foreignObject 
+                        key={`row-${row.key}`}
+                        x={toVisualX(GRID_X_START)} 
+                        y={toVisualY(row.y)} 
+                        width={toVisualX(GRID_X_END) - toVisualX(GRID_X_START)} 
+                        height={toVisualY(row.y + row.h) - toVisualY(row.y)}
+                    >
+                        <div className="w-full h-full flex">
+                            {tableData.map((col, cIdx) => (
+                                <div key={`cell-${row.key}-${cIdx}`} className="relative h-full border-none flex items-center justify-center overflow-hidden" style={{ width: `${100/NUM_COLS}%` }}>
+                                    {row.rotate ? (
+                                        <>
+                                            <AutoResizingTextarea 
+                                                value={col[row.key as keyof PartogramTableColumn] as string || ''}
+                                                onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
+                                                className={`print:hidden w-full h-full bg-transparent text-left ${(row as any).fontSize || 'text-[18px]'} font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none`}
+                                                style={{ 
+                                                    writingMode: 'vertical-rl',
+                                                    transform: 'rotate(180deg)',
+                                                }}
+                                            />
+                                            <div 
+                                                className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-left ${(row as any).fontSize || 'text-[18px]'} font-bold text-black uppercase leading-tight overflow-hidden`}
+                                                style={{ 
+                                                    writingMode: 'vertical-rl',
+                                                    transform: 'rotate(180deg)',
+                                                }}
+                                            >
+                                                {col[row.key as keyof PartogramTableColumn] as string || ''}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <AutoResizingTextarea 
+                                                value={col[row.key as keyof PartogramTableColumn] as string || ''}
+                                                onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
+                                                className={`print:hidden w-full h-full bg-transparent text-center ${(row as any).fontSize || 'text-[18px]'} font-bold border-none outline-none p-1 text-black uppercase resize-none overflow-hidden appearance-none`}
+                                            />
+                                            <div className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-center ${(row as any).fontSize || 'text-[18px]'} font-bold text-black uppercase overflow-hidden`}>
+                                                {col[row.key as keyof PartogramTableColumn] as string || ''}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </foreignObject>
+                ))}
 
-             {/* Table Inputs - Using Specific Rows */}
-             {TABLE_ROWS_CONFIG.map((row, rIdx) => (
-                 <div key={`row-${row.key}`} className="absolute flex" 
-                      style={{ 
-                          top: (toVisualY(row.y) / VIEWBOX_H * 100) + '%', 
-                          left: (toVisualX(GRID_X_START) / VIEWBOX_W * 100) + '%', 
-                          width: ((toVisualX(GRID_X_END) - toVisualX(GRID_X_START)) / VIEWBOX_W * 100) + '%', 
-                          height: (toVisualY(row.y + row.h) - toVisualY(row.y)) / VIEWBOX_H * 100 + '%' 
-                      }}>
-                     {tableData.map((col, cIdx) => (
-                         <div key={`cell-${row.key}-${cIdx}`} className="relative h-full border-none flex items-center justify-center overflow-hidden" style={{ width: `${100/NUM_COLS}%` }}>
-                             {row.rotate ? (
-                                 <AutoResizingTextarea 
-                                     value={col[row.key as keyof PartogramTableColumn] as string || ''}
-                                     onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
-                                     className={`w-full h-full bg-transparent text-left ${(row as any).fontSize || 'text-[8px] sm:text-[9px]'} font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none`}
-                                     style={{ 
-                                         writingMode: 'vertical-rl',
-                                         transform: 'rotate(180deg)',
-                                     }}
-                                 />
-                             ) : (
-                                 <AutoResizingTextarea 
-                                     value={col[row.key as keyof PartogramTableColumn] as string || ''}
-                                     onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
-                                     className={`w-full h-full bg-transparent text-center ${(row as any).fontSize || 'text-[8px] sm:text-[9px]'} font-bold border-none outline-none p-1 text-black uppercase resize-none overflow-hidden appearance-none`}
-                                 />
-                             )}
-                         </div>
-                     ))}
-                 </div>
-             ))}
+                {/* OBSERVATIONS TEXTAREA */}
+                <foreignObject
+                    x={toVisualX(GRID_X_END + 130)}
+                    y={toVisualY(1830)}
+                    width={VIEWBOX_W - toVisualX(GRID_X_END + 130) - 50}
+                    height={toVisualY(3732 + 160) - toVisualY(1830)}
+                >
+                    <AutoResizingTextarea 
+                        value={observations}
+                        onChange={e => setObservations(e.target.value.toUpperCase())}
+                        className="print:hidden w-full h-full bg-transparent text-left text-[18px] font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none"
+                        style={{ 
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            textAlign: 'left',
+                            textAlignLast: 'left'
+                        }}
+                    />
+                    <div 
+                        className="hidden print:block w-full h-full bg-transparent text-left text-[18px] font-bold text-black uppercase leading-tight overflow-hidden whitespace-pre-wrap"
+                        style={{ 
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            textAlign: 'left',
+                            textAlignLast: 'left'
+                        }}
+                    >
+                        {observations}
+                    </div>
+                </foreignObject>
 
-             {/* OBSERVATIONS TEXTAREA - Right side of the graph */}
-             <div className="absolute" style={{ 
-                 top: (toVisualY(1830) / VIEWBOX_H * 100) + '%', 
-                 left: (toVisualX(GRID_X_END + 130) / VIEWBOX_W * 100) + '%', 
-                 width: ((VIEWBOX_W - toVisualX(GRID_X_END + 130) - 50) / VIEWBOX_W * 100) + '%', 
-                 height: (toVisualY(3732 + 160) - toVisualY(1830)) / VIEWBOX_H * 100 + '%' 
-             }}>
-                 <AutoResizingTextarea 
-                     value={observations}
-                     onChange={e => setObservations(e.target.value.toUpperCase())}
-                     className="w-full h-full bg-transparent text-left text-[8px] sm:text-[9px] font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none"
-                     style={{ 
-                         writingMode: 'vertical-rl',
-                         transform: 'rotate(180deg)',
-                         textAlign: 'left',
-                         textAlignLast: 'left'
-                     }}
-                 />
-             </div>
+            </svg>
+
+
 
              {/* Contraction Menu */}
              {contractionMenu && contractionMenu.isOpen && (
