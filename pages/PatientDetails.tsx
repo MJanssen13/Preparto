@@ -416,6 +416,14 @@ const PatientDetails: React.FC = () => {
                 <Link to={`/patient/${id}/edit`} className="text-slate-400 hover:text-medical-600 p-1">
                     <Edit2 className="w-4 h-4" />
                 </Link>
+                {patient.partogramOpenedAt && (
+                    <Link 
+                        to={`/patient/${id}/partogram`}
+                        className="text-xs font-bold text-green-600 hover:text-white hover:bg-green-600 px-2 py-1 rounded-lg border border-green-200 transition-colors"
+                    >
+                        Partograma
+                    </Link>
+                )}
             </div>
             
             {patient.babyName && (
