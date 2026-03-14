@@ -376,17 +376,11 @@ export const patientService = {
           task.status !== 'pending'
       );
 
-      let updates: Partial<Patient> = {
+      const updates: Partial<Patient> = {
           status: newStatus,
           dischargeTime: customDischargeTime || new Date().toISOString(),
           schedule: updatedSchedule
       };
-
-      if (newStatus === PatientStatus.PARTOGRAM_OPENED) {
-          updates.status = PatientStatus.ACTIVE_LABOR;
-          updates.partogramOpenedAt = new Date().toISOString();
-          delete updates.dischargeTime;
-      }
 
       try {
           const result = await this.updatePatient(id, updates);

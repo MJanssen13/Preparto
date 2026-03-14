@@ -14,18 +14,6 @@ const PatientDetails: React.FC = () => {
   const [ctgs, setCtgs] = useState<CTG[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const handleDeleteFutureEvaluations = async () => {
-    if (!patient || !patient.schedule) return;
-    
-    const now = new Date().getTime();
-    const updatedSchedule = patient.schedule.filter(task => new Date(task.timestamp).getTime() <= now);
-    
-    if (updatedSchedule.length === patient.schedule.length) return; // No future tasks
-
-    await patientService.updatePatient(patient.id, { schedule: updatedSchedule });
-    loadData(patient.id);
-  };
-
   // Prontuario Text State
   const [prontuarioText, setProntuarioText] = useState('');
   
@@ -190,47 +178,44 @@ const PatientDetails: React.FC = () => {
                       parts.push(`${col.registerHour}ª H DE REG`);
                   }
 
+                  // 3. Dilatação
+                  const dilPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'dilation');
+                  if (dilPoint) parts.push(`DILAT ${dilPoint.y}CM`);
+
+                  // 4. De Lee (Station)
+                  const stationPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'station');
+                  if (stationPoint) {
+                      // Logic from PartogramPage: y = 6 - station => station = 6 - y
+                      const stationVal = 6 - stationPoint.y;
+                      const sign = stationVal > 0 ? '+' : '';
+                      parts.push(`DE LEE ${sign}${stationVal}`);
+                  }
 
                   // 5. BCF (Main line - approx x=index)
                   const bcfPoints = p.partogramData?.points.filter(pt => pt.type === 'fcf' && Math.floor(pt.x) === index).sort((a,b) => a.x - b.x);
                   const mainBcf = bcfPoints?.find(pt => Math.abs(pt.x - index) < 0.05);
                   if (mainBcf) parts.push(`BCF ${mainBcf.y}`);
 
-                  // 6. DU
+                  // 6. Contractions
                   const blocks = p.partogramData?.contractionBlocks?.filter(c => c.x === index);
                   if (blocks && blocks.length > 0) {
                       const strong = blocks.filter(c => c.type === 'strong').length;
                       const moderate = blocks.filter(c => c.type === 'moderate').length;
                       const weak = blocks.filter(c => c.type === 'weak').length;
-                      parts.push(`DU: >40": ${strong}, 20-39": ${moderate}, <20": ${weak}`);
+                      parts.push(`CONTR >40": ${strong}, 20-39": ${moderate}, <20": ${weak}`);
                   }
 
-                  // 7. TOQUE
-                  const toqueParts = [];
-                  const dilPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'dilation');
-                  if (dilPoint) toqueParts.push(`${dilPoint.y}CM`);
-                  
-                  const stationPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'station');
-                  if (stationPoint) {
-                      const stationVal = 6 - stationPoint.y;
-                      toqueParts.push(`DE LEE ${stationVal > 0 ? '+' : ''}${stationVal}`);
-                  }
-                  if (col.amnioticFluid) toqueParts.push(col.amnioticFluid);
-                  if (col.la) toqueParts.push(`LA ${col.la}`);
-                  
-                  if (toqueParts.length > 0) {
-                      parts.push(`TOQUE: ${toqueParts.join(', ')}`);
-                  }
+                  // 7. Bolsa
+                  if (col.amnioticFluid) parts.push(col.amnioticFluid);
 
-                  // 8. Ocitocina
-                  if (col.oxytocin && col.oxytocin.trim() !== '') {
-                      parts.push(`OCITO: ${col.oxytocin}`);
-                  }
+                  // 8. LA
+                  if (col.la) parts.push(`LA ${col.la}`);
 
-                  // 9. Medicamentos
-                  if (col.meds && col.meds.trim() !== '') {
-                      parts.push(`MEU: ${col.meds}`);
-                  }
+                  // 9. Ocitocina
+                  if (col.oxytocin) parts.push(`OCITO ${col.oxytocin}`);
+
+                  // 10. Medicamentos
+                  if (col.meds) parts.push(`MEU: ${col.meds}`);
 
                   text += parts.join(' | ') + '\n';
 
@@ -431,14 +416,6 @@ const PatientDetails: React.FC = () => {
                 <Link to={`/patient/${id}/edit`} className="text-slate-400 hover:text-medical-600 p-1">
                     <Edit2 className="w-4 h-4" />
                 </Link>
-                {patient.partogramOpenedAt && (
-                    <Link 
-                        to={`/patient/${id}/partogram`}
-                        className="text-xs font-bold text-green-600 hover:text-white hover:bg-green-600 px-2 py-1 rounded-lg border border-green-200 transition-colors"
-                    >
-                        Partograma
-                    </Link>
-                )}
             </div>
             
             {patient.babyName && (
