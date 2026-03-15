@@ -164,6 +164,7 @@ export interface Patient {
   parity: string; // GnPnAn
   admissionDate: string;
   status: PatientStatus;
+  partogramOpenedAt?: string;
   bloodType?: string;
   riskFactors?: string[];
   

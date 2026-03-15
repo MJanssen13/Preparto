@@ -150,7 +150,7 @@ const PatientDetails: React.FC = () => {
       // --- PARTOGRAM DATA ---
       if (p.partogramData && p.partogramData.startTime) {
           const startDate = new Date(p.partogramData.startTime);
-          const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: '2-digit'});
+          const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'});
           const timeStr = startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
           
           text += `\n# ABERTO PARTOGRAMA: ${dateStr} ${timeStr} HS #\n`;
@@ -247,7 +247,10 @@ const PatientDetails: React.FC = () => {
       }
 
       if (p.status === PatientStatus.PARTOGRAM_OPENED) {
-          text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
+          const startDate = p.partogramData?.startTime ? new Date(p.partogramData.startTime) : new Date();
+          const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'});
+          const timeStr = startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          text += `\n# ABERTO PARTOGRAMA: ${dateStr} ${timeStr} HS #`;
       } else if (p.status === PatientStatus.DELIVERY) {
           text += "\nEVOLUIU PARA PARTO NORMAL.";
       } else if (p.status === PatientStatus.C_SECTION) {
@@ -367,7 +370,8 @@ const PatientDetails: React.FC = () => {
   if (loading) return <div className="p-8 text-center">Carregando dados...</div>;
   if (!patient) return <div className="p-8 text-center text-red-500">Paciente não encontrado</div>;
 
-  const isResolved = [PatientStatus.DISCHARGED, PatientStatus.PARTOGRAM_OPENED, PatientStatus.DELIVERY, PatientStatus.C_SECTION].includes(patient.status);
+  const isResolved = [PatientStatus.DISCHARGED, PatientStatus.DELIVERY, PatientStatus.C_SECTION].includes(patient.status);
+  const isPartogramOpened = patient.status === PatientStatus.PARTOGRAM_OPENED;
   
   // Display Status Helpers
   let statusIcon = <CheckCircle2 className="w-5 h-5" />;
@@ -443,6 +447,15 @@ const PatientDetails: React.FC = () => {
           </div>
         </div>
         
+        {isPartogramOpened && (
+            <Link
+                to={`/patient/${id}/partogram`}
+                className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm"
+            >
+                <FileText className="w-5 h-5" />
+                <span className="text-[10px] font-bold">Partograma</span>
+            </Link>
+        )}
         {!isResolved ? (
              <button 
                 onClick={() => {
@@ -488,13 +501,15 @@ const PatientDetails: React.FC = () => {
             Nova CTG
           </Link>
           
-          <Link
-            to={`/patient/${id}/partogram`}
-            className="flex-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm rounded-xl p-3 flex items-center justify-center gap-2 transition-all font-bold text-sm"
-          >
-            <FileText className="w-5 h-5" />
-            Abrir Partograma
-          </Link>
+          {isPartogramOpened && (
+            <Link
+                to={`/patient/${id}/partogram`}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-md rounded-xl p-3 flex items-center justify-center gap-2 transition-all font-bold text-sm"
+            >
+                <FileText className="w-5 h-5" />
+                Partograma
+            </Link>
+          )}
       </div>
 
       {/* RESOLUTION MODAL */}

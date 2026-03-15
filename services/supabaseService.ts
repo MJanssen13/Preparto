@@ -36,7 +36,6 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const isPatientResolved = (status: PatientStatus) => {
     return [
         PatientStatus.DISCHARGED, 
-        PatientStatus.PARTOGRAM_OPENED,
         PatientStatus.DELIVERY,
         PatientStatus.C_SECTION
     ].includes(status);
@@ -378,9 +377,14 @@ export const patientService = {
 
       const updates: Partial<Patient> = {
           status: newStatus,
-          dischargeTime: customDischargeTime || new Date().toISOString(),
           schedule: updatedSchedule
       };
+      
+      if (newStatus !== PatientStatus.PARTOGRAM_OPENED) {
+          updates.dischargeTime = customDischargeTime || new Date().toISOString();
+      } else {
+          updates.dischargeTime = customDischargeTime || new Date().toISOString(); // Wait, user said "a hora inidicada no desfecho deve ser a hora de abertura do partograma."
+      }
 
       try {
           const result = await this.updatePatient(id, updates);

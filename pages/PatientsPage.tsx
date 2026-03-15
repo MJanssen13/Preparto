@@ -33,7 +33,6 @@ const PatientsPage: React.FC = () => {
   const isResolved = (status: PatientStatus) => {
       return [
         PatientStatus.DISCHARGED, 
-        PatientStatus.PARTOGRAM_OPENED,
         PatientStatus.DELIVERY,
         PatientStatus.C_SECTION
       ].includes(status);

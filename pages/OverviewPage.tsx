@@ -397,6 +397,14 @@ const PatientOverviewRow: React.FC<{ patient: Patient }> = ({ patient }) => {
                      </div>
 
                      <div className="flex items-center gap-2">
+                         {patient.partogramOpenedAt && (
+                            <Link 
+                                to={`/patient/${patient.id}/partogram`}
+                                className="text-xs font-bold text-green-600 hover:text-white hover:bg-green-600 px-3 py-2 rounded-lg border border-green-200 transition-colors"
+                            >
+                                Partograma
+                            </Link>
+                         )}
                          <Link 
                             to={`/patient/${patient.id}`}
                             onClick={(e) => e.stopPropagation()}
