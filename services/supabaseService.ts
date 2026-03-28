@@ -82,10 +82,15 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     
     // Partogram Data
     ...(p.partogramData && { partogram_data: p.partogramData }),
-    ...(p.partogramOpenedAt && { partogram_opened_at: p.partogramOpenedAt }),
-
-    // REMOVED: ctgs mapping here. CTGs are now handled in a separate table.
   };
+
+  // If partogramOpenedAt is provided, ensure it's stored in partogram_data.startTime
+  if (p.partogramOpenedAt) {
+      payload.partogram_data = {
+          ...(payload.partogram_data || p.partogramData || {}),
+          startTime: p.partogramOpenedAt
+      };
+  }
 
   if (p.dischargeTime === null) {
       payload.discharge_time = null;
@@ -93,6 +98,7 @@ const mapPatientToDB = (p: Partial<Patient>) => {
       payload.discharge_time = p.dischargeTime;
   }
 
+  // REMOVED: ctgs mapping here. CTGs are now handled in a separate table.
   return payload;
 };
 
@@ -121,7 +127,7 @@ const mapPatientFromDB = (db: any): Patient => {
     magnesiumSulfateEndTime: db.magnesium_sulfate_end_time,
 
     dischargeTime: db.discharge_time,
-    partogramOpenedAt: db.partogram_opened_at,
+    partogramOpenedAt: db.partogram_data?.startTime,
     schedule: db.schedule || [],
     lastObservation: db.last_observation,
     observations: db.observations ? db.observations.map(mapObservationFromDB) : undefined,

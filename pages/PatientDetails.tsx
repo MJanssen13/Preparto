@@ -36,7 +36,7 @@ const PatientDetails: React.FC = () => {
     // Init resolution time to now
     const now = new Date();
     setResDate(now.toISOString().split('T')[0]);
-    setResTime(now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+    setResTime(now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0'));
   }, [id]);
 
   const loadData = async (patientId: string) => {
@@ -177,11 +177,11 @@ const PatientDetails: React.FC = () => {
                   }
 
                   // 3. Dilatação
-                  const dilPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'dilation');
+                  const dilPoint = p.partogramData?.points?.find(pt => pt.x === index && pt.type === 'dilation');
                   if (dilPoint) parts.push(`DILAT ${dilPoint.y}CM`);
 
                   // 4. De Lee (Station)
-                  const stationPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'station');
+                  const stationPoint = p.partogramData?.points?.find(pt => pt.x === index && pt.type === 'station');
                   if (stationPoint) {
                       // Logic from PartogramPage: y = 6 - station => station = 6 - y
                       const stationVal = 6 - stationPoint.y;
@@ -190,13 +190,13 @@ const PatientDetails: React.FC = () => {
                   }
 
                   // 5. BCF (Main line - approx x=index)
-                  const bcfPoints = p.partogramData?.points.filter(pt => pt.type === 'fcf' && Math.floor(pt.x) === index).sort((a,b) => a.x - b.x);
+                  const bcfPoints = p.partogramData?.points?.filter(pt => pt.type === 'fcf' && Math.floor(pt.x) === index).sort((a,b) => a.x - b.x);
                   const mainBcf = bcfPoints?.find(pt => Math.abs(pt.x - index) < 0.05);
                   if (mainBcf) parts.push(`BCF ${mainBcf.y}`);
 
                   // 6. Contractions
-                  const blocks = p.partogramData?.contractionBlocks?.filter(c => c.x === index);
-                  if (blocks && blocks.length > 0) {
+                  const blocks = p.partogramData?.contractionBlocks?.filter(c => c.x === index) || [];
+                  if (blocks.length > 0) {
                       const strong = blocks.filter(c => c.type === 'strong').length;
                       const moderate = blocks.filter(c => c.type === 'moderate').length;
                       const weak = blocks.filter(c => c.type === 'weak').length;
@@ -300,6 +300,10 @@ const PatientDetails: React.FC = () => {
 
   const handlePartogramOpen = async () => {
     if (!id || !patient) return;
+    if (!partogramDate || !partogramTime) {
+        alert("Por favor, preencha a data e a hora.");
+        return;
+    }
     setIsProcessing(true);
     try {
       const partogramOpenedAt = new Date(`${partogramDate}T${partogramTime}`).toISOString();
@@ -312,6 +316,7 @@ const PatientDetails: React.FC = () => {
       loadData(id);
     } catch (error) {
       console.error(error);
+      alert("Erro ao abrir partograma. Verifique a data e hora.");
     } finally {
       setIsProcessing(false);
     }
@@ -480,7 +485,12 @@ const PatientDetails: React.FC = () => {
         )}
         {!isPartogramOpened && (
             <button 
-                onClick={() => setShowPartogramModal(true)}
+                onClick={() => {
+                    const now = new Date();
+                    setPartogramDate(now.toISOString().split('T')[0]);
+                    setPartogramTime(now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0'));
+                    setShowPartogramModal(true);
+                }}
                 className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm"
             >
                 <FileText className="w-5 h-5" />
@@ -493,7 +503,7 @@ const PatientDetails: React.FC = () => {
                 onClick={() => {
                     const now = new Date();
                     setResDate(now.toISOString().split('T')[0]);
-                    setResTime(now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                    setResTime(now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0'));
                     setShowResolveModal(true);
                 }}
                 className="flex flex-col items-center justify-center p-2 text-medical-700 bg-medical-50 hover:bg-medical-100 rounded-lg border border-medical-200 transition-colors shadow-sm"

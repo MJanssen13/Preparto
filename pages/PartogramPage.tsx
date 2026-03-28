@@ -214,7 +214,7 @@ const PartogramPage: React.FC = () => {
                         }));
                     }
                     
-                    setPoints(p.partogramData.points);
+                    setPoints(p.partogramData.points || []);
                     
                     // Load Contractions
                     if (p.partogramData.contractionBlocks) {
@@ -222,15 +222,17 @@ const PartogramPage: React.FC = () => {
                     } else if (p.partogramData.contractions) {
                         // Legacy conversion
                         const legacyBlocks: PartogramContractionBlock[] = [];
-                        p.partogramData.contractions.forEach(c => {
+                        (p.partogramData.contractions || []).forEach(c => {
                             for(let i=0; i<c.frequency; i++) {
                                 legacyBlocks.push({ x: c.x, slot: i, type: c.duration });
                             }
                         });
                         setContractionBlocks(legacyBlocks);
+                    } else {
+                        setContractionBlocks([]);
                     }
 
-                    setTableData(p.partogramData.tableData);
+                    setTableData(p.partogramData.tableData || []);
                     if (p.partogramData.activePhaseStartIndex !== undefined) setActivePhaseIndex(p.partogramData.activePhaseStartIndex);
                     if (p.partogramData.observations) setObservations(p.partogramData.observations);
                 } else {
