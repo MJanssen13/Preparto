@@ -21,6 +21,11 @@ const PatientDetails: React.FC = () => {
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   
+  // Partogram Modal State
+  const [showPartogramModal, setShowPartogramModal] = useState(false);
+  const [partogramDate, setPartogramDate] = useState('');
+  const [partogramTime, setPartogramTime] = useState('');
+  
   // Resolution Date/Time State
   const [resDate, setResDate] = useState('');
   const [resTime, setResTime] = useState('');
@@ -148,15 +153,8 @@ const PatientDetails: React.FC = () => {
       }
 
       // --- PARTOGRAM DATA ---
-      if (p.partogramData && p.partogramData.startTime) {
-          const startDate = new Date(p.partogramData.startTime);
-          const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'});
-          const timeStr = startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-          
-          text += `\n# ABERTO PARTOGRAMA: ${dateStr} ${timeStr} HS #\n`;
-
-          if (p.partogramData.tableData) {
-              p.partogramData.tableData.forEach((col, index) => {
+      if (p.partogramData && p.partogramData.tableData) {
+          p.partogramData.tableData.forEach((col, index) => {
                   // Check if there is any data for this hour to avoid empty lines
                   const hasPoints = p.partogramData?.points.some(pt => Math.floor(pt.x) === index);
                   const hasContractions = p.partogramData?.contractionBlocks?.some(c => c.x === index);
@@ -244,14 +242,15 @@ const PatientDetails: React.FC = () => {
                   }
               });
           }
-      }
 
-      if (p.status === PatientStatus.PARTOGRAM_OPENED) {
-          const startDate = p.partogramData?.startTime ? new Date(p.partogramData.startTime) : new Date();
+      if (p.partogramOpenedAt || (p.partogramData && p.partogramData.startTime)) {
+          const startDate = p.partogramOpenedAt ? new Date(p.partogramOpenedAt) : new Date(p.partogramData!.startTime!);
           const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'});
           const timeStr = startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
           text += `\n# ABERTO PARTOGRAMA: ${dateStr} ${timeStr} HS #`;
-      } else if (p.status === PatientStatus.DELIVERY) {
+      }
+
+      if (p.status === PatientStatus.DELIVERY) {
           text += "\nEVOLUIU PARA PARTO NORMAL.";
       } else if (p.status === PatientStatus.C_SECTION) {
           text += "\nENCAMINHADA PARA CESÁREA.";
@@ -297,6 +296,25 @@ const PatientDetails: React.FC = () => {
       } finally {
           setIsProcessing(false);
       }
+  };
+
+  const handlePartogramOpen = async () => {
+    if (!id || !patient) return;
+    setIsProcessing(true);
+    try {
+      const partogramOpenedAt = new Date(`${partogramDate}T${partogramTime}`).toISOString();
+      await patientService.updatePatient(id, {
+        ...patient,
+        status: PatientStatus.PARTOGRAM_OPENED,
+        partogramOpenedAt
+      });
+      setShowPartogramModal(false);
+      loadData(id);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
   
   const handleReopen = async () => {
@@ -447,15 +465,29 @@ const PatientDetails: React.FC = () => {
           </div>
         </div>
         
-        {isPartogramOpened && (
+        {isPartogramOpened && patient.partogramOpenedAt && (
             <Link
                 to={`/patient/${id}/partogram`}
                 className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm"
             >
                 <FileText className="w-5 h-5" />
-                <span className="text-[10px] font-bold">Partograma</span>
+                <span className="text-[10px] font-bold">
+                    {new Date(patient.partogramOpenedAt).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})} 
+                    {' '}
+                    {new Date(patient.partogramOpenedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </span>
             </Link>
         )}
+        {!isPartogramOpened && (
+            <button 
+                onClick={() => setShowPartogramModal(true)}
+                className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm"
+            >
+                <FileText className="w-5 h-5" />
+                <span className="text-[10px] font-bold">Partograma</span>
+            </button>
+        )}
+
         {!isResolved ? (
              <button 
                 onClick={() => {
@@ -511,6 +543,52 @@ const PatientDetails: React.FC = () => {
             </Link>
           )}
       </div>
+
+      {/* PARTOGRAM MODAL */}
+      {showPartogramModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+             <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-200">
+                 <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                     <h3 className="font-bold text-slate-800">Abertura de Partograma</h3>
+                     <button onClick={() => setShowPartogramModal(false)} className="p-1 rounded-full hover:bg-slate-100">
+                         <X className="w-5 h-5 text-slate-400" />
+                     </button>
+                 </div>
+                 
+                 <div className="p-4 space-y-3">
+                     {/* Date/Time Picker Block */}
+                     <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 mb-2">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
+                            <CalendarClock className="w-3 h-3" /> Data e Hora de Abertura
+                        </label>
+                        <div className="flex gap-3">
+                            <input 
+                                type="date" 
+                                value={partogramDate} 
+                                onChange={e => setPartogramDate(e.target.value)}
+                                className="flex-1 p-2 border border-slate-300 rounded text-sm bg-white font-bold text-slate-700"
+                            />
+                            <input 
+                                type="time" 
+                                value={partogramTime}
+                                onChange={e => setPartogramTime(e.target.value)}
+                                className="w-24 p-2 border border-slate-300 rounded text-sm bg-white font-bold text-slate-700"
+                            />
+                        </div>
+                     </div>
+
+                     <button 
+                        disabled={isProcessing}
+                        onClick={handlePartogramOpen}
+                        className="w-full flex items-center justify-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 text-green-800 transition-colors font-bold"
+                     >
+                         <FileText className="w-5 h-5" />
+                         Confirmar Abertura
+                     </button>
+                 </div>
+             </div>
+        </div>
+      )}
 
       {/* RESOLUTION MODAL */}
       {showResolveModal && (

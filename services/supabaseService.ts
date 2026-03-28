@@ -82,6 +82,7 @@ const mapPatientToDB = (p: Partial<Patient>) => {
     
     // Partogram Data
     ...(p.partogramData && { partogram_data: p.partogramData }),
+    ...(p.partogramOpenedAt && { partogram_opened_at: p.partogramOpenedAt }),
 
     // REMOVED: ctgs mapping here. CTGs are now handled in a separate table.
   };
@@ -120,6 +121,7 @@ const mapPatientFromDB = (db: any): Patient => {
     magnesiumSulfateEndTime: db.magnesium_sulfate_end_time,
 
     dischargeTime: db.discharge_time,
+    partogramOpenedAt: db.partogram_opened_at,
     schedule: db.schedule || [],
     lastObservation: db.last_observation,
     observations: db.observations ? db.observations.map(mapObservationFromDB) : undefined,
