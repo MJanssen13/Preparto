@@ -146,19 +146,18 @@ const EditPatient: React.FC = () => {
           } else {
               // START PROTOCOL
               // For Mg, helpful to auto-add params to next 24h of pending tasks
-              if (isMg) {
-                 setSchedule(currentSchedule => {
-                     const cutoff = new Date(Date.now() + 24 * 60 * 60 * 1000).getTime();
-                     return currentSchedule.map(task => {
-                         const taskTime = new Date(task.timestamp).getTime();
-                         if (task.status === 'pending' && taskTime <= cutoff) {
-                             const newFocus = Array.from(new Set([...task.focus, 'Reflexo', 'Diurese', 'FR']));
-                             return { ...task, focus: newFocus };
-                         }
-                         return task;
-                     });
-                 });
-              }
+              setSchedule(currentSchedule => {
+                  const cutoff = new Date(Date.now() + 24 * 60 * 60 * 1000).getTime();
+                  return currentSchedule.map(task => {
+                      const taskTime = new Date(task.timestamp).getTime();
+                      if (task.status === 'pending' && taskTime <= cutoff) {
+                          const paramsToAdd = isMg ? ['Reflexo', 'Diurese', 'FR'] : ['PA'];
+                          const newFocus = Array.from(new Set([...task.focus, ...paramsToAdd]));
+                          return { ...task, focus: newFocus };
+                      }
+                      return task;
+                  });
+              });
 
               return {
                   ...prev,

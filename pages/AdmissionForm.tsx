@@ -141,7 +141,13 @@ const AdmissionForm: React.FC = () => {
 
   const handleToggleProtocol = (type: 'methyldopa' | 'magnesium') => {
       if (type === 'methyldopa') {
-          setFormData(prev => ({ ...prev, useMethyldopa: !prev.useMethyldopa }));
+          setFormData(prev => {
+              const newState = !prev.useMethyldopa;
+              if (newState) {
+                  applyPreset(60, ['PA']);
+              }
+              return { ...prev, useMethyldopa: newState };
+          });
       } else {
           setFormData(prev => {
               const newState = !prev.useMagnesiumSulfate;

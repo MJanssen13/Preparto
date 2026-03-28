@@ -111,7 +111,13 @@ const PatientDetails: React.FC = () => {
           const lineParts = [`${time} HS`];
           
           if (o.obstetric.bcf) lineParts.push(`BCF: ${o.obstetric.bcf} BPM`);
-          if (o.vitals.paSystolic) lineParts.push(`PA: ${o.vitals.paSystolic}X${o.vitals.paDiastolic} MMHG`);
+          if (o.vitals.paSystolic) {
+              let paStr = `PA: ${o.vitals.paSystolic}X${o.vitals.paDiastolic}`;
+              if (o.vitals.paStandingSystolic) {
+                  paStr += ` (EM PÉ: ${o.vitals.paStandingSystolic}X${o.vitals.paStandingDiastolic})`;
+              }
+              lineParts.push(`${paStr} MMHG`);
+          }
           
           if (o.obstetric.dinamicaSummary) lineParts.push(`DU ${o.obstetric.dinamicaSummary.toUpperCase()}`);
           else if (o.obstetric.dinamicaFrequency) lineParts.push(`DU ${o.obstetric.dinamicaFrequency}/10'`);

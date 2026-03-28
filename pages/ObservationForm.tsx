@@ -271,6 +271,11 @@ const ObservationForm: React.FC = () => {
                     initialParams.push('Reflexo', 'Diurese', 'FR');
                 }
 
+                // Auto-activate PA if patient is using Methyldopa protocol
+                if (p.useMethyldopa && !initialParams.includes('PA')) {
+                    initialParams.push('PA');
+                }
+
                 if (taskId) {
                     const task = p.schedule.find(t => t.id === taskId);
                     if (task) {
@@ -442,11 +447,24 @@ const ObservationForm: React.FC = () => {
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-4 border-b pb-2">Sinais Vitais</h3>
                 <div className="space-y-4">
                     {activeParams.includes('PA') && (
-                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
-                            <div className="col-span-3 text-xs font-bold text-slate-700 mb-1">Pressão Arterial (mmHg)</div>
-                            <input name="paSys" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Sys" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paSys} onChange={handleChange} />
-                            <span className="pb-3 font-bold text-slate-400">x</span>
-                            <input name="paDia" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Dia" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paDia} onChange={handleChange} />
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
+                                <div className="col-span-3 text-xs font-bold text-slate-700 mb-1">Pressão Arterial Sentada (mmHg)</div>
+                                <input name="paSys" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Sys" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paSys} onChange={handleChange} />
+                                <span className="pb-3 font-bold text-slate-400">x</span>
+                                <input name="paDia" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Dia" className="w-full p-3 border border-slate-300 rounded-lg text-lg font-bold text-center" value={formData.paDia} onChange={handleChange} />
+                            </div>
+
+                            {patient?.useMethyldopa && (
+                                <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end pt-2 border-t border-slate-100">
+                                    <div className="col-span-3 text-xs font-bold text-blue-700 mb-1 flex items-center gap-1">
+                                        <Activity className="w-3 h-3" /> Pressão Arterial em Pé (mmHg)
+                                    </div>
+                                    <input name="paSysStanding" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Sys" className="w-full p-3 border border-blue-200 bg-blue-50/30 rounded-lg text-lg font-bold text-center text-blue-800" value={formData.paSysStanding} onChange={handleChange} />
+                                    <span className="pb-3 font-bold text-blue-300">x</span>
+                                    <input name="paDiaStanding" type="text" inputMode="numeric" pattern="[0-9]*" placeholder="Dia" className="w-full p-3 border border-blue-200 bg-blue-50/30 rounded-lg text-lg font-bold text-center text-blue-800" value={formData.paDiaStanding} onChange={handleChange} />
+                                </div>
+                            )}
                         </div>
                     )}
                     <div className="grid grid-cols-2 gap-4">
