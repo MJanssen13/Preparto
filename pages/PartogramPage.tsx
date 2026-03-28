@@ -50,11 +50,11 @@ const Y_TIME_REG_TOP = 1976.829;
 
 // Table Rows - Specific Y coordinates
 const TABLE_ROWS_CONFIG = [
-    { key: 'amnioticFluid', y: 2994.665, h: 61.5, fontSize: 'text-[32px]' }, // Bolsa
-    { key: 'la', y: 3056.164, h: 61.5, fontSize: 'text-[32px]' },            // LA
-    { key: 'oxytocin', y: 3117.664, h: 61.5, fontSize: 'text-[32px]' },      // Ocitocina
-    { key: 'meds', y: 3179.163, h: 553.066, rotate: true, fontSize: 'text-[27px]' },       // Medicamentos (Big block)
-    { key: 'examiner', y: 3732.229, h: 160.037, rotate: true, fontSize: 'text-[27px]' }    // Examinador
+    { key: 'amnioticFluid', y: 2994.665, h: 61.5, fontSize: 'text-[24px]' }, // Bolsa
+    { key: 'la', y: 3056.164, h: 61.5, fontSize: 'text-[24px]' },            // LA
+    { key: 'oxytocin', y: 3117.664, h: 61.5, fontSize: 'text-[24px]' },      // Ocitocina
+    { key: 'meds', y: 3179.163, h: 553.066, rotate: true, fontSize: 'text-[20px]' },       // Medicamentos (Big block)
+    { key: 'examiner', y: 3732.229, h: 160.037, rotate: true, fontSize: 'text-[20px]' }    // Examinador
 ];
 
 // Varieties of Presentation
@@ -709,50 +709,50 @@ const PartogramPage: React.FC = () => {
                     {/* DYNAMIC PATIENT DATA - Positioned relative to main group */}
                     <foreignObject x="400" y="803" width="1900" height="120">
                         <input type="text" value={headerData.name} onChange={e => handleHeaderChange('name', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[80px] font-bold text-black uppercase leading-none">{headerData.name}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[50px] font-bold text-black uppercase leading-none">{headerData.name}</div>
                     </foreignObject>
                     
                     <foreignObject x="330" y="882" width="550" height="120">
                         <input type="text" value={headerData.date} onChange={e => handleHeaderChange('date', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.date}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.date}</div>
                     </foreignObject>
                     <foreignObject x="1130" y="882" width="600" height="120">
                         <input type="text" value={headerData.id} onChange={e => handleHeaderChange('id', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.id}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.id}</div>
                     </foreignObject>
                     <foreignObject x="1980" y="882" width="250" height="120">
                         <input type="text" value={headerData.age} onChange={e => handleHeaderChange('age', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.age}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.age}</div>
                     </foreignObject>
                     
                     <foreignObject x="340" y="973" width="500" height="120">
                         <input type="text" value={headerData.dum} onChange={e => handleHeaderChange('dum', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.dum}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.dum}</div>
                     </foreignObject>
                     <foreignObject x="850" y="973" width="330" height="120">
                         <input type="text" value={headerData.dpp} onChange={e => handleHeaderChange('dpp', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.dpp}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.dpp}</div>
                     </foreignObject>
                     <foreignObject x="1410" y="973" width="800" height="120">
                         <input type="text" value={headerData.ig} onChange={e => handleHeaderChange('ig', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.ig}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.ig}</div>
                     </foreignObject>
                     <foreignObject x="1920" y="973" width="300" height="120">
                         <input type="text" value={headerData.us} onChange={e => handleHeaderChange('us', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.us}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.us}</div>
                     </foreignObject>
                     
                     <foreignObject x="430" y="1056" width="500" height="120">
                         <input type="text" value={headerData.parity} onChange={e => handleHeaderChange('parity', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[100px] font-bold text-black uppercase leading-none">{headerData.parity}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[60px] font-bold text-black uppercase leading-none">{headerData.parity}</div>
                     </foreignObject>
                     <foreignObject x="1120" y="1056" width="1100" height="120">
                         <input type="text" value={headerData.bloodType} onChange={e => handleHeaderChange('bloodType', e.target.value)} onBlur={handleBloodTypeBlur} className="print:hidden w-full h-full bg-transparent text-[40px] leading-[60px] ml-0 font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[80px] font-bold text-black uppercase leading-none">{headerData.bloodType}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[50px] font-bold text-black uppercase leading-none">{headerData.bloodType}</div>
                     </foreignObject>
                     <foreignObject x="1700" y="1056" width="500" height="120">
                         <input type="text" value={headerData.babyName} onChange={e => handleHeaderChange('babyName', e.target.value)} className="print:hidden w-full h-full bg-transparent text-[40px] font-bold border-none outline-none uppercase appearance-none" />
-                        <div className="hidden print:flex w-full h-full items-center text-[80px] font-bold text-black uppercase leading-none">{headerData.babyName}</div>
+                        <div className="hidden print:flex w-full h-full items-center text-[50px] font-bold text-black uppercase leading-none">{headerData.babyName}</div>
                     </foreignObject>
 
                     {/* DYNAMIC GRAPH CONTENT */}
@@ -883,7 +883,7 @@ const PartogramPage: React.FC = () => {
                                     onChange={e => updateTableData(i, 'realTime', e.target.value.toUpperCase())} 
                                     className="print:hidden w-[52.375px] h-full bg-transparent text-center text-[30px] leading-[56.5px] font-bold border-none outline-none p-0 text-black uppercase resize-none overflow-hidden appearance-none [writing-mode:vertical-lr] no-underline rotate-180" 
                                 />
-                                <div className="hidden print:flex w-full h-full items-center justify-center text-[40px] font-bold text-black uppercase [writing-mode:vertical-lr] text-center rotate-180">
+                                <div className="hidden print:flex w-full h-full items-center justify-center text-[30px] font-bold text-black uppercase [writing-mode:vertical-lr] text-center rotate-180">
                                     {col.realTime}
                                 </div>
                             </div>
@@ -906,7 +906,7 @@ const PartogramPage: React.FC = () => {
                                     onChange={e => updateTableData(i, 'registerHour', e.target.value.toUpperCase())}
                                     className="print:hidden w-full h-full bg-transparent text-center text-[40px] font-bold border-none outline-none pt-[10px] text-black uppercase resize-none overflow-hidden appearance-none" 
                                 />
-                                <div className="hidden print:flex w-full h-full items-center justify-center text-[40px] font-bold text-black uppercase text-center pt-[10px]">
+                                <div className="hidden print:flex w-full h-full items-center justify-center text-[30px] font-bold text-black uppercase text-center pt-[10px]">
                                     {col.registerHour}
                                 </div>
                             </div>
@@ -938,7 +938,7 @@ const PartogramPage: React.FC = () => {
                                                 }}
                                             />
                                             <div 
-                                                className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-left ${(row as any).fontSize || 'text-[32px]'} font-bold text-black uppercase leading-tight overflow-hidden`}
+                                                className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-left ${(row as any).fontSize || 'text-[24px]'} font-bold text-black uppercase leading-tight overflow-hidden`}
                                                 style={{ 
                                                     writingMode: 'vertical-rl',
                                                     transform: 'rotate(180deg)',
@@ -954,7 +954,7 @@ const PartogramPage: React.FC = () => {
                                                 onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
                                                 className={`print:hidden w-full h-full bg-transparent text-center ${(row as any).fontSize || 'text-[18px]'} font-bold border-none outline-none p-1 text-black uppercase resize-none overflow-hidden appearance-none`}
                                             />
-                                            <div className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-center ${(row as any).fontSize || 'text-[32px]'} font-bold text-black uppercase overflow-hidden`}>
+                                            <div className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-center ${(row as any).fontSize || 'text-[24px]'} font-bold text-black uppercase overflow-hidden`}>
                                                 {col[row.key as keyof PartogramTableColumn] as string || ''}
                                             </div>
                                         </>
@@ -984,7 +984,7 @@ const PartogramPage: React.FC = () => {
                         }}
                     />
                     <div 
-                        className="hidden print:block w-full h-full bg-transparent text-left text-[30px] font-bold text-black uppercase leading-tight overflow-hidden whitespace-pre-wrap"
+                        className="hidden print:block w-full h-full bg-transparent text-left text-[22px] font-bold text-black uppercase leading-tight overflow-hidden whitespace-pre-wrap"
                         style={{ 
                             writingMode: 'vertical-rl',
                             transform: 'rotate(180deg)',
