@@ -197,8 +197,8 @@ const PartogramPage: React.FC = () => {
                     startTime: ''
                 };
 
-                if (p.status === PatientStatus.PARTOGRAM_OPENED && p.partogramOpenedAt) {
-                    const d = new Date(p.partogramOpenedAt);
+                if (p.status === PatientStatus.PARTOGRAM_OPENED && p.dischargeTime) {
+                    const d = new Date(p.dischargeTime);
                     initialHeaderData.startDate = d.toISOString().split('T')[0];
                     initialHeaderData.startTime = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 }
@@ -214,7 +214,7 @@ const PartogramPage: React.FC = () => {
                         }));
                     }
                     
-                    setPoints(p.partogramData.points || []);
+                    setPoints(p.partogramData.points);
                     
                     // Load Contractions
                     if (p.partogramData.contractionBlocks) {
@@ -222,17 +222,15 @@ const PartogramPage: React.FC = () => {
                     } else if (p.partogramData.contractions) {
                         // Legacy conversion
                         const legacyBlocks: PartogramContractionBlock[] = [];
-                        (p.partogramData.contractions || []).forEach(c => {
+                        p.partogramData.contractions.forEach(c => {
                             for(let i=0; i<c.frequency; i++) {
                                 legacyBlocks.push({ x: c.x, slot: i, type: c.duration });
                             }
                         });
                         setContractionBlocks(legacyBlocks);
-                    } else {
-                        setContractionBlocks([]);
                     }
 
-                    setTableData(p.partogramData.tableData || []);
+                    setTableData(p.partogramData.tableData);
                     if (p.partogramData.activePhaseStartIndex !== undefined) setActivePhaseIndex(p.partogramData.activePhaseStartIndex);
                     if (p.partogramData.observations) setObservations(p.partogramData.observations);
                 } else {
@@ -269,7 +267,7 @@ const PartogramPage: React.FC = () => {
       setIsSubmitting(true);
       
       const partogramData: any = {
-          startTime: headerData.startDate && headerData.startTime ? new Date(`${headerData.startDate}T${headerData.startTime}`).toISOString() : new Date().toISOString(),
+          startTime: new Date().toISOString(),
           points,
           contractionBlocks, 
           tableData,

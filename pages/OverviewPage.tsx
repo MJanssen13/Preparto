@@ -397,7 +397,7 @@ const PatientOverviewRow: React.FC<{ patient: Patient }> = ({ patient }) => {
                      </div>
 
                      <div className="flex items-center gap-2">
-                         {patient.status === PatientStatus.PARTOGRAM_OPENED && (
+                         {patient.partogramOpenedAt && (
                             <Link 
                                 to={`/patient/${patient.id}/partogram`}
                                 className="text-xs font-bold text-green-600 hover:text-white hover:bg-green-600 px-3 py-2 rounded-lg border border-green-200 transition-colors"
