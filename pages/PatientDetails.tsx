@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Patient, Observation, PatientStatus, CTG } from '../types';
 import { patientService } from '../services/supabaseService';
-import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, CalendarClock, HeartPulse, FileText, Copy } from 'lucide-react';
+import { ArrowLeft, Plus, Droplets, Thermometer, Activity, Pill, Clock, BedDouble, CircleDot, Edit2, Beaker, Hammer, Wind, Waves, CheckCircle2, Droplet, Baby, Scissors, Archive, RotateCcw, X, CalendarClock, HeartPulse, FileText, Copy, Eye, Image as ImageIcon } from 'lucide-react';
 import { VitalCharts } from '../components/VitalCharts';
 
 const PatientDetails: React.FC = () => {
@@ -24,6 +24,9 @@ const PatientDetails: React.FC = () => {
   // Resolution Date/Time State
   const [resDate, setResDate] = useState('');
   const [resTime, setResTime] = useState('');
+
+  // CTG Image Modal State
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) loadData(id);
@@ -134,26 +137,15 @@ const PatientDetails: React.FC = () => {
           text += lineParts.join(' | ') + '\n';
       });
 
-      if (ctgList && ctgList.length > 0) {
-          text += '\n--- CARDIOTOCOGRAFIAS ---\n';
-          const sortedCtgs = [...ctgList].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-          sortedCtgs.forEach(ctg => {
-              const d = new Date(ctg.timestamp);
-              const dateStr = d.toLocaleDateString('pt-BR');
-              const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-              text += `[${dateStr} ${timeStr}] CTG: LB ${ctg.baseline}BPM | VARIAB: ${ctg.variability.toUpperCase()} | AT/MF: ${ctg.atMfRatio.replace('<', 'MENOR ').replace('>', 'MAIOR ').toUpperCase()} | DESC: ${ctg.decelerations.toUpperCase()} | SCORE: ${ctg.score}/5 (${ctg.conclusion.toUpperCase()})`;
-              if (ctg.notes) text += ` | OBS: ${ctg.notes.toUpperCase()}`;
-              text += '\n';
-          });
-      }
-
       // --- PARTOGRAM DATA ---
+      let partogramHeaderAdded = false;
       if (p.partogramData && p.partogramData.startTime) {
           const startDate = new Date(p.partogramData.startTime);
           const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'});
-          const timeStr = startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          const timeStr = startDate.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
           
           text += `\n# ABERTO PARTOGRAMA: ${dateStr} ${timeStr} HS #\n`;
+          partogramHeaderAdded = true;
 
           if (p.partogramData.tableData) {
               p.partogramData.tableData.forEach((col, index) => {
@@ -168,27 +160,30 @@ const PatientDetails: React.FC = () => {
                   const parts = [];
                   
                   // 1. Hora Real
-                  // Ensure format HH:00 if only HH is provided
                   let hourStr = col.realTime || '--';
+                  // Replace ; with : if present
+                  hourStr = hourStr.replace(';', ':');
                   if (hourStr.length <= 2 && !hourStr.includes(':')) hourStr += ':00';
                   parts.push(`${hourStr} HS`);
                   
                   // 2. Hora de Registro
                   if (col.registerHour) {
-                      parts.push(`${col.registerHour}ª H DE REG`);
+                      parts.push(`${col.registerHour}ª H`);
                   }
 
-                  // 3. Dilatação
+                  // 3 & 4. Toque (Dilatação + De Lee)
                   const dilPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'dilation');
-                  if (dilPoint) parts.push(`DILAT ${dilPoint.y}CM`);
-
-                  // 4. De Lee (Station)
                   const stationPoint = p.partogramData?.points.find(pt => pt.x === index && pt.type === 'station');
-                  if (stationPoint) {
-                      // Logic from PartogramPage: y = 6 - station => station = 6 - y
-                      const stationVal = 6 - stationPoint.y;
-                      const sign = stationVal > 0 ? '+' : '';
-                      parts.push(`DE LEE ${sign}${stationVal}`);
+                  
+                  if (dilPoint || stationPoint) {
+                      const toqueParts = [];
+                      if (dilPoint) toqueParts.push(`${dilPoint.y}CM`);
+                      if (stationPoint) {
+                          const stationVal = 6 - stationPoint.y;
+                          const sign = stationVal > 0 ? '+' : '';
+                          toqueParts.push(`DE LEE ${sign}${stationVal}`);
+                      }
+                      parts.push(`TOQUE: ${toqueParts.join(', ')}`);
                   }
 
                   // 5. BCF (Main line - approx x=index)
@@ -196,26 +191,30 @@ const PatientDetails: React.FC = () => {
                   const mainBcf = bcfPoints?.find(pt => Math.abs(pt.x - index) < 0.05);
                   if (mainBcf) parts.push(`BCF ${mainBcf.y}`);
 
-                  // 6. Contractions
+                  // 7. Bolsa
+                  if (col.amnioticFluid) parts.push(col.amnioticFluid);
+
+                  // 8. LA
+                  if (col.la) {
+                      // Remove spaces before ++ if present
+                      const laVal = col.la.replace(/\s+\+\+/, '++');
+                      parts.push(`LA ${laVal}`);
+                  }
+
+                  // 6. Contractions (DU)
                   const blocks = p.partogramData?.contractionBlocks?.filter(c => c.x === index);
                   if (blocks && blocks.length > 0) {
                       const strong = blocks.filter(c => c.type === 'strong').length;
                       const moderate = blocks.filter(c => c.type === 'moderate').length;
                       const weak = blocks.filter(c => c.type === 'weak').length;
-                      parts.push(`CONTR >40": ${strong}, 20-39": ${moderate}, <20": ${weak}`);
+                      parts.push(`DU: >40": ${strong}, 20-39": ${moderate}, <20": ${weak}`);
                   }
-
-                  // 7. Bolsa
-                  if (col.amnioticFluid) parts.push(col.amnioticFluid);
-
-                  // 8. LA
-                  if (col.la) parts.push(`LA ${col.la}`);
 
                   // 9. Ocitocina
                   if (col.oxytocin) parts.push(`OCITO ${col.oxytocin}`);
 
                   // 10. Medicamentos
-                  if (col.meds) parts.push(`MEU: ${col.meds}`);
+                  if (col.meds) parts.push(`MED: ${col.meds}`);
 
                   text += parts.join(' | ') + '\n';
 
@@ -236,7 +235,7 @@ const PatientDetails: React.FC = () => {
                           }
 
                           const subParts = [subTimeStr];
-                          if (col.registerHour) subParts.push(`${col.registerHour}ª H DE REG`);
+                          if (col.registerHour) subParts.push(`${col.registerHour}ª H`);
                           subParts.push(`BCF ${pt.y}`);
                           
                           text += subParts.join(' | ') + '\n';
@@ -246,10 +245,23 @@ const PatientDetails: React.FC = () => {
           }
       }
 
-      if (p.status === PatientStatus.PARTOGRAM_OPENED) {
-          const startDate = p.partogramData?.startTime ? new Date(p.partogramData.startTime) : new Date();
+      if (ctgList && ctgList.length > 0) {
+          text += '\n--- CARDIOTOCOGRAFIAS ---\n';
+          const sortedCtgs = [...ctgList].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          sortedCtgs.forEach(ctg => {
+              const d = new Date(ctg.timestamp);
+              const dateStr = d.toLocaleDateString('pt-BR');
+              const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+              text += `[${dateStr} ${timeStr}] CTG: LB ${ctg.baseline}BPM | VARIAB: ${ctg.variability.toUpperCase()} | AT/MF: ${ctg.atMfRatio.replace('<', 'MENOR ').replace('>', 'MAIOR ').toUpperCase()} | DESC: ${ctg.decelerations.toUpperCase()} | SCORE: ${ctg.score}/5 (${ctg.conclusion.toUpperCase()})`;
+              if (ctg.notes) text += ` | OBS: ${ctg.notes.toUpperCase()}`;
+              text += '\n';
+          });
+      }
+
+      if (p.status === PatientStatus.PARTOGRAM_OPENED && !partogramHeaderAdded) {
+          const startDate = p.partogramData?.startTime ? new Date(p.partogramData.startTime) : (p.dischargeTime ? new Date(p.dischargeTime) : new Date());
           const dateStr = startDate.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit', year: 'numeric'});
-          const timeStr = startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          const timeStr = startDate.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'});
           text += `\n# ABERTO PARTOGRAMA: ${dateStr} ${timeStr} HS #`;
       } else if (p.status === PatientStatus.DELIVERY) {
           text += "\nEVOLUIU PARA PARTO NORMAL.";
@@ -447,38 +459,50 @@ const PatientDetails: React.FC = () => {
           </div>
         </div>
         
-        {isPartogramOpened && (
-            <Link
-                to={`/patient/${id}/partogram`}
-                className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm"
-            >
-                <FileText className="w-5 h-5" />
-                <span className="text-[10px] font-bold">Partograma</span>
-            </Link>
-        )}
-        {!isResolved ? (
-             <button 
-                onClick={() => {
-                    const now = new Date();
-                    setResDate(now.toISOString().split('T')[0]);
-                    setResTime(now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-                    setShowResolveModal(true);
-                }}
-                className="flex flex-col items-center justify-center p-2 text-medical-700 bg-medical-50 hover:bg-medical-100 rounded-lg border border-medical-200 transition-colors shadow-sm"
-             >
-                <CheckCircle2 className="w-5 h-5" />
-                <span className="text-[10px] font-bold">Desfecho</span>
-             </button>
-        ) : (
-             <button
-                onClick={handleReopen}
-                disabled={isProcessing}
-                className="flex flex-col items-center justify-center p-2 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors shadow-sm disabled:opacity-50"
-             >
-                <RotateCcw className="w-4 h-4" />
-                <span className="text-[10px] font-bold">Reabrir</span>
-             </button>
-        )}
+        <div className="flex gap-2">
+            {isPartogramOpened ? (
+                <Link
+                    to={`/patient/${id}/partogram`}
+                    className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm"
+                >
+                    <FileText className="w-5 h-5" />
+                    <span className="text-[10px] font-bold">Partograma</span>
+                </Link>
+            ) : !isResolved && (
+                <button 
+                    onClick={() => handleResolution(PatientStatus.PARTOGRAM_OPENED)}
+                    disabled={isProcessing}
+                    className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm disabled:opacity-50"
+                >
+                    <FileText className="w-5 h-5" />
+                    <span className="text-[10px] font-bold">Partograma</span>
+                </button>
+            )}
+            
+            {!isResolved ? (
+                 <button 
+                    onClick={() => {
+                        const now = new Date();
+                        setResDate(now.toISOString().split('T')[0]);
+                        setResTime(now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+                        setShowResolveModal(true);
+                    }}
+                    className="flex flex-col items-center justify-center p-2 text-medical-700 bg-medical-50 hover:bg-medical-100 rounded-lg border border-medical-200 transition-colors shadow-sm"
+                 >
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="text-[10px] font-bold">Desfecho</span>
+                 </button>
+            ) : (
+                 <button
+                    onClick={handleReopen}
+                    disabled={isProcessing}
+                    className="flex flex-col items-center justify-center p-2 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors shadow-sm disabled:opacity-50"
+                 >
+                    <RotateCcw className="w-4 h-4" />
+                    <span className="text-[10px] font-bold">Reabrir</span>
+                 </button>
+            )}
+        </div>
       </div>
 
       {/* Action Buttons Row */}
@@ -511,6 +535,39 @@ const PatientDetails: React.FC = () => {
             </Link>
           )}
       </div>
+
+      {/* CTG IMAGE MODAL */}
+      {selectedImage && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-auto" onClick={() => setSelectedImage(null)}>
+            <div className="relative max-w-4xl w-full bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <ImageIcon className="w-5 h-5 text-pink-500" />
+                        Imagem da Cardiotocografia
+                    </h3>
+                    <button onClick={() => setSelectedImage(null)} className="p-2 rounded-full hover:bg-slate-200 transition-colors">
+                        <X className="w-6 h-6 text-slate-500" />
+                    </button>
+                </div>
+                <div className="p-2 bg-slate-100 flex items-center justify-center min-h-[300px]">
+                    <img 
+                        src={selectedImage} 
+                        alt="CTG" 
+                        className="max-w-full h-auto rounded shadow-sm"
+                        referrerPolicy="no-referrer"
+                    />
+                </div>
+                <div className="p-4 bg-white flex justify-end">
+                    <button 
+                        onClick={() => setSelectedImage(null)}
+                        className="px-6 py-2 bg-slate-800 text-white rounded-lg font-bold hover:bg-slate-900 transition-colors"
+                    >
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* RESOLUTION MODAL */}
       {showResolveModal && (
@@ -568,18 +625,6 @@ const PatientDetails: React.FC = () => {
                          <div className="text-left">
                              <div className="font-bold">Cesárea</div>
                              <div className="text-[10px] opacity-80">Encerra monitoramento</div>
-                         </div>
-                     </button>
-
-                     <button 
-                        disabled={isProcessing}
-                        onClick={() => handleResolution(PatientStatus.PARTOGRAM_OPENED)}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 text-green-800 transition-colors"
-                     >
-                         <div className="bg-green-200 p-2 rounded-full"><CheckCircle2 className="w-5 h-5 text-green-700" /></div>
-                         <div className="text-left">
-                             <div className="font-bold">Partograma Aberto</div>
-                             <div className="text-[10px] opacity-80">Monitoramento migrado para papel</div>
                          </div>
                      </button>
 
@@ -677,7 +722,7 @@ const PatientDetails: React.FC = () => {
       )}
 
       {/* Charts Section */}
-      <VitalCharts observations={observations} />
+      <VitalCharts observations={observations} partogramData={patient.partogramData} />
 
       {/* Copiar para Prontuário Section - EDITABLE */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -789,6 +834,18 @@ const PatientDetails: React.FC = () => {
                              {ctg.notes && (
                                 <div className="col-span-2 text-xs text-pink-600 italic mt-1">
                                     "{ctg.notes}"
+                                </div>
+                             )}
+
+                             {ctg.image && (
+                                <div className="col-span-2 pt-2">
+                                    <button
+                                        onClick={() => setSelectedImage(ctg.image || null)}
+                                        className="flex items-center gap-2 text-xs font-bold text-pink-700 bg-white px-3 py-2 rounded-lg border border-pink-200 hover:bg-pink-100 transition-colors shadow-sm"
+                                    >
+                                        <Eye className="w-4 h-4" />
+                                        Ver Imagem do Exame
+                                    </button>
                                 </div>
                              )}
                          </div>

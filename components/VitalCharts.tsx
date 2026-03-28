@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Observation } from '../types';
+import { Observation, PartogramData } from '../types';
 import {
   LineChart,
   Line,
@@ -15,6 +15,7 @@ import {
 
 interface VitalChartsProps {
   observations: Observation[];
+  partogramData?: PartogramData;
   isMaximized?: boolean;
 }
 
@@ -34,10 +35,10 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const VitalCharts: React.FC<VitalChartsProps> = ({ observations, isMaximized = false }) => {
-  // Reverse observations for chronological order (Oldest -> Newest)
-  const data = [...observations].reverse().map(obs => ({
-    time: obs.timestamp,
+export const VitalCharts: React.FC<VitalChartsProps> = ({ observations, partogramData, isMaximized = false }) => {
+  // 1. Process observations
+  const obsData = observations.map(obs => ({
+    time: new Date(obs.timestamp).getTime(),
     bcf: obs.obstetric.bcf,
     dilation: obs.obstetric.dilation,
     systolic: obs.vitals.paSystolic,
@@ -45,6 +46,43 @@ export const VitalCharts: React.FC<VitalChartsProps> = ({ observations, isMaximi
     standingSystolic: obs.vitals.paStandingSystolic,
     standingDiastolic: obs.vitals.paStandingDiastolic
   }));
+
+  // 2. Process partogram points
+  const partogramPoints: any[] = [];
+  if (partogramData && partogramData.startTime && partogramData.points) {
+    const startTs = new Date(partogramData.startTime).getTime();
+    partogramData.points.forEach(pt => {
+      // Convert x (hours) to milliseconds
+      const ts = startTs + pt.x * 3600000;
+      partogramPoints.push({
+        time: ts,
+        // Map 'fcf' to 'bcf' for chart consistency
+        [pt.type === 'fcf' ? 'bcf' : pt.type]: pt.y
+      });
+    });
+  }
+
+  // 3. Merge all data by timestamp
+  const allDataMap = new Map<number, any>();
+  
+  [...obsData, ...partogramPoints].forEach(item => {
+    // Round time to nearest minute to merge very close points if necessary, 
+    // but here we use exact timestamp.
+    const existing = allDataMap.get(item.time) || { time: item.time };
+    
+    // Merge properties, preferring non-undefined values
+    const merged = { ...existing };
+    Object.keys(item).forEach(key => {
+        if (item[key] !== undefined) {
+            merged[key] = item[key];
+        }
+    });
+    
+    allDataMap.set(item.time, merged);
+  });
+
+  // 4. Convert back to array and sort chronologically
+  const data = Array.from(allDataMap.values()).sort((a, b) => a.time - b.time);
 
   if (data.length < 2) return <div className="text-center text-slate-400 text-sm py-8">Dados insuficientes para gráficos</div>;
 

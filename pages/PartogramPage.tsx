@@ -266,21 +266,40 @@ const PartogramPage: React.FC = () => {
       if (!id || !patient) return;
       setIsSubmitting(true);
       
+      let startTime = new Date().toISOString();
+      if (headerData.startDate && headerData.startTime) {
+          try {
+              // Ensure time is HH:MM format
+              let timeStr = headerData.startTime;
+              if (timeStr.length === 5 && timeStr.includes(':')) {
+                  startTime = new Date(`${headerData.startDate}T${timeStr}`).toISOString();
+              } else {
+                  // Fallback if format is weird
+                  startTime = new Date(`${headerData.startDate} ${headerData.startTime}`).toISOString();
+              }
+          } catch (e) {
+              console.error("Error parsing header date/time:", e);
+          }
+      }
+
       const partogramData: any = {
-          startTime: new Date().toISOString(),
+          startTime,
           points,
           contractionBlocks, 
           tableData,
           activePhaseStartIndex: activePhaseIndex,
-          headerData, // Save header data if schema allows, or just use it for print
+          headerData, 
           observations
       };
       
       try {
-          // Note: We are only saving partogramData structure. 
-          // If we want to update patient demographics permanently, we should call updatePatient with those fields too.
-          // For now, we assume these edits are for the partogram session/print.
-          await patientService.updatePatient(id, { partogramData });
+          const updates: any = { partogramData };
+          // If partogram is opened, the dischargeTime is used as the opening time for display/prontuario
+          if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
+              updates.dischargeTime = startTime;
+          }
+          
+          await patientService.updatePatient(id, updates);
           navigate(`/patient/${id}`);
       } catch (error) {
           console.error(error);

@@ -84,9 +84,13 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
             text += lineParts.join(' | ') + '\n';
         });
 
+        if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
+            text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
+        }
+
         // APPEND CTGs at the end
         if (patient.ctgs && patient.ctgs.length > 0) {
-            text += '\n--- CARDIOTOCOGRAFIAS ---\n';
+            text += '\n\n--- CARDIOTOCOGRAFIAS ---\n';
             // Sort old -> new
             const sortedCtgs = [...patient.ctgs].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
             
@@ -100,10 +104,6 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                 if (ctg.notes) text += ` | OBS: ${ctg.notes.toUpperCase()}`;
                 text += '\n';
             });
-        }
-
-        if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
-            text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
         }
         return text;
     };
@@ -136,7 +136,7 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
                     <div className="h-40 flex items-center justify-center text-slate-400 text-sm">Carregando...</div>
                 ) : (
                     <div className={`${isChartMaximized ? 'flex-1 min-h-0' : 'h-64'} overflow-y-auto custom-scrollbar`}>
-                        <VitalCharts observations={observations} isMaximized={isChartMaximized} />
+                        <VitalCharts observations={observations} partogramData={patient.partogramData} isMaximized={isChartMaximized} />
                     </div>
                 )}
             </div>
