@@ -51,8 +51,6 @@ export const AutoResizingTextarea: React.FC<AutoResizingTextareaProps> = ({
       value={value}
       className={className}
       style={{ 
-        textAlign: 'justify', 
-        textAlignLast: 'center', // Centers the last line (or single line)
         whiteSpace: 'pre-wrap',
         resize: 'none',
         overflow: 'hidden',

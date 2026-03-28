@@ -931,14 +931,14 @@ const PartogramPage: React.FC = () => {
                                             <AutoResizingTextarea 
                                                 value={col[row.key as keyof PartogramTableColumn] as string || ''}
                                                 onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
-                                                className={`print:hidden w-full h-full bg-transparent text-left ${(row as any).fontSize || 'text-[18px]'} font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-tight appearance-none`}
+                                                className={`print:hidden w-full h-full bg-transparent text-left ${(row as any).fontSize || 'text-[18px]'} font-bold border-none outline-none p-0 m-0 text-black uppercase resize-none overflow-hidden leading-[0.8] appearance-none`}
                                                 style={{ 
                                                     writingMode: 'vertical-rl',
                                                     transform: 'rotate(180deg)',
                                                 }}
                                             />
                                             <div 
-                                                className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-left ${(row as any).fontSize || 'text-[32px]'} font-bold text-black uppercase leading-tight overflow-hidden`}
+                                                className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-left ${(row as any).fontSize || 'text-[32px]'} font-bold text-black uppercase leading-[0.8] overflow-hidden whitespace-pre-wrap`}
                                                 style={{ 
                                                     writingMode: 'vertical-rl',
                                                     transform: 'rotate(180deg)',
@@ -952,9 +952,9 @@ const PartogramPage: React.FC = () => {
                                             <AutoResizingTextarea 
                                                 value={col[row.key as keyof PartogramTableColumn] as string || ''}
                                                 onChange={e => updateTableData(cIdx, row.key as keyof PartogramTableColumn, e.target.value.toUpperCase())}
-                                                className={`print:hidden w-full h-full bg-transparent text-center ${(row as any).fontSize || 'text-[18px]'} font-bold border-none outline-none p-1 text-black uppercase resize-none overflow-hidden appearance-none`}
+                                                className={`print:hidden w-full h-full bg-transparent text-center ${(row as any).fontSize || 'text-[18px]'} font-bold border-none outline-none p-1 text-black uppercase resize-none overflow-hidden appearance-none leading-[0.8]`}
                                             />
-                                            <div className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-center ${(row as any).fontSize || 'text-[32px]'} font-bold text-black uppercase overflow-hidden`}>
+                                            <div className={`hidden print:flex w-full h-full items-center justify-center bg-transparent text-center ${(row as any).fontSize || 'text-[32px]'} font-bold text-black uppercase overflow-hidden whitespace-pre-wrap leading-[0.8]`}>
                                                 {col[row.key as keyof PartogramTableColumn] as string || ''}
                                             </div>
                                         </>
