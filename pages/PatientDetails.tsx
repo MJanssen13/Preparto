@@ -243,6 +243,9 @@ const PatientDetails: React.FC = () => {
                   }
               });
           }
+          if (p.partogramData.observations) {
+              text += `\nOBSERVAÇÕES DO PARTOGRAMA: ${p.partogramData.observations.toUpperCase()}\n`;
+          }
       }
 
       if (ctgList && ctgList.length > 0) {
@@ -460,7 +463,7 @@ const PatientDetails: React.FC = () => {
         </div>
         
         <div className="flex gap-2">
-            {isPartogramOpened ? (
+            {(patient.partogramData || isPartogramOpened) ? (
                 <Link
                     to={`/patient/${id}/partogram`}
                     className="flex flex-col items-center justify-center p-2 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg border border-green-200 transition-colors shadow-sm"
@@ -468,7 +471,7 @@ const PatientDetails: React.FC = () => {
                     <FileText className="w-5 h-5" />
                     <span className="text-[10px] font-bold">Partograma</span>
                 </Link>
-            ) : !isResolved && (
+            ) : (
                 <button 
                     onClick={() => handleResolution(PatientStatus.PARTOGRAM_OPENED)}
                     disabled={isProcessing}

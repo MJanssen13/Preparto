@@ -87,6 +87,9 @@ const ExpandedContent = ({ patient, observations, isLoading }: { patient: Patien
         if (patient.status === PatientStatus.PARTOGRAM_OPENED) {
             text += "\nABERTO PARTOGRAMA E MANTIDO DEMAIS PARÂMETROS REGISTRADOS EM PARTOGRAMA.";
         }
+        if (patient.partogramData?.observations) {
+            text += `\nOBSERVAÇÕES DO PARTOGRAMA: ${patient.partogramData.observations.toUpperCase()}\n`;
+        }
 
         // APPEND CTGs at the end
         if (patient.ctgs && patient.ctgs.length > 0) {
